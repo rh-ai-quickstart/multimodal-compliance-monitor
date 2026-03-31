@@ -187,7 +187,7 @@ modelServing:
   openvino:
     image: "registry.redhat.io/rhoai/odh-openvino-model-server-rhel9@sha256:7daebf4a4205b9b81293932a1dfec705f59a83de8097e468e875088996c1f224"
     restPort: 8888
-    grpcPort: 8001
+    grpcPort: 9000
     modelFormat:
       name: pytorch
       version: "2"

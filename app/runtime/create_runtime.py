@@ -42,7 +42,7 @@ def load_config():
         == "true",
         "runtime_image": os.getenv("SERVING_RUNTIME_IMAGE", OVMS_IMAGE),
         "rest_port": int(os.getenv("REST_PORT", "8888")),
-        "grpc_port": int(os.getenv("GRPC_PORT", "8001")),
+        "grpc_port": int(os.getenv("GRPC_PORT", "9000")),
         "runtime_args": runtime_args,
         "runtime_command": runtime_command,
         "runtime_env": runtime_env,
