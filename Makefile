@@ -104,7 +104,8 @@ build-push-data:
 	podman push $(DATA_IMAGE)
 
 deploy: check-openai-env
-	@domain=$$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}' 2>/dev/null || true); \
+	@. ./.env; \
+	domain=$$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}' 2>/dev/null || true); \
 	if [ -n "$(NAMESPACE)" ]; then oc new-project "$(NAMESPACE)" --display-name="$(NAMESPACE)" >/dev/null 2>&1 || oc project "$(NAMESPACE)"; fi; \
 	if [ -n "$$domain" ]; then \
 		host="$(HELM_RELEASE)-$(NAMESPACE).$$domain"; \
@@ -122,7 +123,11 @@ deploy: check-openai-env
 		--set modelServing.runtimeType=$(RUNTIME_TYPE) \
 		$(if $(strip $(LABEL_STUDIO_ENABLED)),--set labelStudio.enabled=$(LABEL_STUDIO_ENABLED),) \
 		$${host:+--set openshift.sharedHost=$$host} \
-		$${ls_host:+--set labelStudio.route.host=$$ls_host}"; \
+		$${ls_host:+--set labelStudio.route.host=$$ls_host} \
+		--set openai.apiToken=$$OPENAI_API_TOKEN \
+		--set openai.apiEndpoint=$$OPENAI_API_ENDPOINT \
+		--set openai.model=$$OPENAI_MODEL \
+		--set openai.temperature=$$OPENAI_TEMPERATURE"; \
 	helm upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
 		--namespace $(NAMESPACE) --create-namespace $$helm_args
 
