@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import VideoPlayer from './components/VideoPlayer';
 import PPEDescription from './components/PPEDescription';
@@ -15,20 +15,24 @@ function App() {
   const [showDiagram, setShowDiagram] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [configs, setConfigs] = useState([]);
+  const [selectedConfigId, setSelectedConfigId] = useState(null);
   const [activeConfigId, setActiveConfigId] = useState(null);
+  const switchRequestSeq = useRef(0);
 
   const handleSelectConfig = useCallback(async (configId) => {
+    // Update UI selection immediately; stream switch still waits for backend activation.
+    setSelectedConfigId(configId);
+    // Switch the feed immediately so toggling sources feels responsive.
+    setActiveConfigId(configId);
+    const currentSeq = ++switchRequestSeq.current;
     if (configId == null) {
-      setActiveConfigId(null);
       return;
     }
-    try {
-      await axios.post(`${API_URL}/active_config`, { config_id: configId });
-      // Drive the video URL only after the backend has started the stream (avoids MJPEG before start_streaming).
-      setActiveConfigId(configId);
-    } catch (err) {
+    axios.post(`${API_URL}/active_config`, { config_id: configId }).catch((err) => {
+      // Ignore stale responses if a newer selection already happened.
+      if (currentSeq !== switchRequestSeq.current) return;
       console.error('Failed to set active config:', err);
-    }
+    });
   }, []);
 
   const fetchConfigs = useCallback(async () => {
@@ -74,7 +78,7 @@ function App() {
         <aside className="source-column">
           <SourceSection
             configs={configs}
-            activeConfigId={activeConfigId}
+            selectedConfigId={selectedConfigId}
             onSelectConfig={handleSelectConfig}
           />
         </aside>
