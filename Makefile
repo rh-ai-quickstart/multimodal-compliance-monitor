@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help local-up local-build-up local-down build push deploy deploy-gpu deploy-openvino deploy-openvino-labelstudio deploy-labelstudio undeploy dev-backend dev-frontend local-build build-push-data kill-ports check-openai-env eval eval-k8s
+.PHONY: help local-up local-build-up local-down build push deploy deploy-gpu deploy-openvino deploy-openvino-labelstudio deploy-labelstudio undeploy dev-backend dev-frontend local-build build-push-data kill-ports check-openai-env eval eval-k8s init-eval-db
 help:
 	@echo "Available targets:"
 	@echo "  local-up   - Start local stack with Podman Compose"
@@ -17,7 +17,9 @@ help:
 	@echo "  dev-backend - Create venv, install deps, run backend"
 	@echo "  dev-frontend - Install deps and run frontend"
 	@echo "  eval         - Run LLM chat evaluation against the running backend (local)"
+	@echo "                 Use EVAL_DATASET=bird to select a dataset (default: ppe)"
 	@echo "  eval-k8s     - Run LLM chat evaluation against the deployed K8s backend (helm test)"
+	@echo "  init-eval-db - Snapshot the running DB into app/evals/db_seed_data.sql"
 
 
 # Load .env file if it exists
@@ -50,6 +52,7 @@ HELM_CHART ?= deploy/helm/ppe-compliance-monitor
 # Model serving runtime: "kserve" (GPU/Triton) or "openvino" (CPU/OVMS)
 RUNTIME_TYPE ?= kserve
 LABEL_STUDIO_ENABLED ?=
+EVAL_DATASET ?= ppe
 
 check-openai-env:
 	@token="$(OPENAI_API_TOKEN)"; \
@@ -148,10 +151,16 @@ undeploy:
 	@helm uninstall $(HELM_RELEASE) --namespace $(NAMESPACE) 2>/dev/null || echo "Release $(HELM_RELEASE) not found (already uninstalled or never deployed)."
 
 eval: check-openai-env ## Run LLM chat evaluation against the running backend (local).
-	podman-compose -f $(COMPOSE_FILE) --profile eval run --rm --no-deps --build backend-eval
+	@mkdir -p $(CURDIR)/app/evals/preds
+	EVAL_DATASET=$(EVAL_DATASET) podman-compose -f $(COMPOSE_FILE) --profile eval run --rm --no-deps --build \
+	  -v $(CURDIR)/app/evals/preds:/evals/preds:z,U \
+	  backend-eval
 
 eval-k8s: ## Run LLM chat evaluation against the deployed K8s backend (helm test).
 	helm test $(HELM_RELEASE) --namespace $(NAMESPACE) --logs
+
+init-eval-db: ## Snapshot the running DB into app/evals/db_seed_data.sql for eval use.
+	podman-compose -f $(COMPOSE_FILE) --profile eval run --rm --no-deps init-eval-db
 
 kill-ports: ## Kill processes using required ports
 	@echo "Killing processes on application ports..."

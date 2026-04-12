@@ -52,3 +52,7 @@ app/data/uploads/
 # Config uploads and thumbnails (local dev)
 data/config/
 deploy/helm/ppe-compliance-monitor/charts/label-studio-0.1.0.tgz
+
+# Eval prediction results (generated per run)
+app/evals/preds/*
+!app/evals/preds/.gitkeep

@@ -196,6 +196,8 @@ services:
     image: ppe-compliance-monitor-evals:local
     environment:
       BACKEND_URL: "http://backend:8888"
+      EVAL_DATASET: "${EVAL_DATASET:-ppe}"
+      SNAPSHOT_DIR: "/snapshots"
       OPENAI_API_TOKEN: "${OPENAI_API_TOKEN}"
       OPENAI_API_ENDPOINT: "${OPENAI_API_ENDPOINT}"
       OPENAI_MODEL: "${OPENAI_MODEL}"
@@ -206,6 +208,25 @@ services:
       DB_NAME: ppe_tracking
       DB_USER: ppe_user
       DB_PASSWORD: ppe_password
+    volumes:
+      - eval_snapshots:/snapshots
+    networks:
+      - ppe
+    profiles:
+      - eval
+
+  init-eval-db:
+    image: docker.io/library/python:3.11-slim
+    command: sh -c "pip install -q psycopg2-binary && python /evals/init_db.py"
+    working_dir: /evals
+    environment:
+      DB_HOST: postgresql
+      DB_PORT: "5432"
+      DB_NAME: ppe_tracking
+      DB_USER: ppe_user
+      DB_PASSWORD: ppe_password
+    volumes:
+      - ../../app/evals:/evals:z
     networks:
       - ppe
     profiles:
@@ -275,3 +296,4 @@ volumes:
   postgres_data:
   labelstudio_data:
   model_repo:
+  eval_snapshots:

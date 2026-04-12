@@ -1,0 +1,50 @@
+[
+  {
+    "id": "bluejay_single__birds_on_screen",
+    "question": "How many birds are on the screen now?",
+    "description": "Bluejays: 1 Summary: 1 bird on screen. 1 Bluejay detected.",
+    "golden_answer": "There is 1 bird currently on the screen. It is a Bluejay."
+  },
+  {
+    "id": "bluejay_single__species_id",
+    "question": "What species of bird is on screen?",
+    "description": "Bluejays: 1 Summary: 1 bird on screen. 1 Bluejay detected.",
+    "golden_answer": "There is 1 Bluejay on screen. No Cardinals are detected."
+  },
+  {
+    "id": "mixed_species__birds_on_screen",
+    "question": "How many birds are on the screen now?",
+    "description": "Bluejays: 2, Cardinals: 1 Summary: 3 birds on screen. 2 Bluejays and 1 Cardinal detected.",
+    "golden_answer": "There are 3 birds currently on the screen: 2 Bluejays and 1 Cardinal."
+  },
+  {
+    "id": "mixed_species__species_count",
+    "question": "How many Bluejays are visible?",
+    "description": "Bluejays: 2, Cardinals: 1 Summary: 3 birds on screen. 2 Bluejays and 1 Cardinal detected.",
+    "golden_answer": "2 Bluejays are visible on screen right now."
+  },
+  {
+    "id": "empty_scene__birds_on_screen",
+    "question": "How many birds are on the screen now?",
+    "description": "No detections Summary: 0 birds on screen.",
+    "golden_answer": "There are 0 birds currently on the screen. No birds are detected."
+  },
+  {
+    "id": "cardinals_only__birds_on_screen",
+    "question": "How many birds are on the screen now?",
+    "description": "Cardinals: 3 Summary: 3 birds on screen. 3 Cardinals detected.",
+    "golden_answer": "There are 3 birds currently on the screen. All 3 are Cardinals."
+  },
+  {
+    "id": "cardinals_only__species_id",
+    "question": "Are there any Bluejays on screen?",
+    "description": "Cardinals: 3 Summary: 3 birds on screen. 3 Cardinals detected.",
+    "golden_answer": "No, there are no Bluejays on screen. Only 3 Cardinals are currently detected."
+  },
+  {
+    "id": "many_bluejays__count",
+    "question": "How many birds are on the screen now?",
+    "description": "Bluejays: 5 Summary: 5 birds on screen. 5 Bluejays detected.",
+    "golden_answer": "There are 5 birds currently on the screen. All 5 are Bluejays."
+  }
+]
