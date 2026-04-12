@@ -17,6 +17,7 @@ from llm import LLMChat
 from database import (
     count_app_configs,
     get_all_configs,
+    get_classes_for_config,
     get_config_by_id,
     insert_config,
     delete_config,
@@ -288,6 +289,9 @@ def chat():
     Supports streaming via Server-Sent Events when ``stream=true`` is sent in
     the JSON body.  An optional ``session_id`` field enables per-session
     conversation memory (defaults to ``"default"``).
+
+    When ``app_config_id`` is provided, all SQL queries are scoped to that
+    config's detection data (enforced at the tool level).
     """
     global latest_description, latest_summary
     data = request.get_json(silent=True) or {}
@@ -303,13 +307,26 @@ def chat():
     else:
         with demo._display_lock:
             desc = demo._display_description or latest_description
-            # summ = demo._display_summary or demo.latest_summary or latest_summary
-    context = desc.replace("Detected: ", "", 1)  # + " " + summ
+    context = desc.replace("Detected: ", "", 1)
+
+    app_config_id = data.get("app_config_id")
+    classes_info = None
+    if app_config_id is not None:
+        try:
+            app_config_id = int(app_config_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "app_config_id must be an integer"}), 400
+        raw = get_classes_for_config(app_config_id)
+        classes_info = [
+            {"name": v["name"], "trackable": v["trackable"]} for v in raw.values()
+        ]
 
     answer = llm_chat.chat(
         question=question,
         context=context,
         session_id=session_id,
+        app_config_id=app_config_id,
+        classes_info=classes_info,
     )
     return jsonify({"answer": answer})
 

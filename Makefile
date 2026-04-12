@@ -209,4 +209,10 @@ kill-ports: ## Kill processes using required ports
 		fuser -k 8554/tcp 2>/dev/null || true; \
 	fi
 	@echo "   ✓ MediaMTX 8554 killed"
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		lsof -ti :8082 | xargs kill -9 2>/dev/null || true; \
+	else \
+		fuser -k 8082/tcp 2>/dev/null || true; \
+	fi
+	@echo "   ✓ Label Studio 8082 killed"
 	@echo "All ports cleared."

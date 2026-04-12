@@ -5,7 +5,7 @@ import './ChatBot.css';
 import { API_URL } from '../config';
 
 
-const ChatBot = () => {
+const ChatBot = ({ activeConfigId }) => {
   const [question, setQuestion] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
   const chatHistoryRef = useRef(null);
@@ -16,6 +16,10 @@ const ChatBot = () => {
     }
   }, [chatHistory]);
 
+  useEffect(() => {
+    setChatHistory([]);
+  }, [activeConfigId]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!question.trim()) return;
@@ -25,7 +29,10 @@ const ChatBot = () => {
     setQuestion('');
 
     try {
-      const response = await axios.post(`${API_URL}/chat`, { question });
+      const response = await axios.post(`${API_URL}/chat`, {
+        question,
+        app_config_id: activeConfigId,
+      });
       const answer = response.data.answer;
       setChatHistory([...newChatHistory, { sender: 'bot', message: answer }]);
     } catch (error) {

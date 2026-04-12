@@ -83,7 +83,7 @@ function App() {
           <PPEDescription />
         </main>
         <aside className="chat-column">
-          <ChatBot />
+          <ChatBot activeConfigId={activeConfigId} />
         </aside>
       </div>
     </div>
