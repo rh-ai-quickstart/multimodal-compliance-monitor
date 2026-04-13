@@ -183,7 +183,7 @@ services:
       # Config storage: MinIO (enables horizontal scaling)
       CONFIG_BUCKET: config
       DEFAULT_OVMS_MODEL_URL: "ovms:8081"
-      MINIO_VIDEO_BUCKET: "data"
+      PHOENIX_COLLECTOR_ENDPOINT: "http://phoenix:4317"
     ports:
       - "8888:8888"
     networks:
@@ -214,6 +214,19 @@ services:
       - ppe
     profiles:
       - eval
+
+  phoenix:
+    image: docker.io/arizephoenix/phoenix:latest
+    container_name: phoenix
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes:
+      - phoenix_data:/mnt/data
+    networks:
+      - ppe
 
   init-eval-db:
     image: docker.io/library/python:3.11-slim
@@ -297,3 +310,4 @@ volumes:
   labelstudio_data:
   model_repo:
   eval_snapshots:
+  phoenix_data:

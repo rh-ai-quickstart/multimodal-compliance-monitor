@@ -6,6 +6,7 @@ import os
 import time
 from datetime import datetime
 
+from tracing import init_tracing
 from minio_client import (
     get_config_bucket,
     upload_bytes,
@@ -28,6 +29,8 @@ from thumbnail_utils import generate_thumbnail_for_video_source, is_s3_video_pat
 from logger import get_logger
 
 log = get_logger(__name__)
+
+init_tracing()
 
 # Minimum detection confidence to draw a box on the MJPEG video feed.
 VIDEO_FEED_DRAW_MIN_CONF = 0.5
