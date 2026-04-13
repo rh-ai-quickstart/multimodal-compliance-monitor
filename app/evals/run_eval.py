@@ -98,7 +98,7 @@ def run() -> None:
     correctness = GEval(
         name="Correctness",
         criteria=(
-            "The actual output must state the correct number and factual "
+            "Does the golden and the acual are predicted the same value?"
             "details matching the expected output. Minor wording differences "
             "are acceptable."
         ),
