@@ -1,14 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import './ChatBot.css';
 import { API_URL } from '../config';
 
+const generateSessionId = () =>
+  `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 const ChatBot = ({ activeConfigId }) => {
   const [question, setQuestion] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
   const chatHistoryRef = useRef(null);
+  const sessionIdRef = useRef(generateSessionId());
 
   useEffect(() => {
     if (chatHistoryRef.current) {
@@ -16,9 +19,18 @@ const ChatBot = ({ activeConfigId }) => {
     }
   }, [chatHistory]);
 
-  useEffect(() => {
+  const resetSession = useCallback(() => {
+    const oldId = sessionIdRef.current;
+    sessionIdRef.current = generateSessionId();
     setChatHistory([]);
-  }, [activeConfigId]);
+    if (oldId) {
+      axios.post(`${API_URL}/chat/reset`, { session_id: oldId }).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    resetSession();
+  }, [activeConfigId, resetSession]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,6 +50,7 @@ const ChatBot = ({ activeConfigId }) => {
       const response = await axios.post(`${API_URL}/chat`, {
         question,
         description,
+        session_id: sessionIdRef.current,
         app_config_id: activeConfigId,
       });
       const answer = response.data.answer;

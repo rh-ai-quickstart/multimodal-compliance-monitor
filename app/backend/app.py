@@ -321,14 +321,31 @@ def chat():
             {"name": v["name"], "trackable": v["trackable"]} for v in raw.values()
         ]
 
-    answer = llm_chat.chat(
-        question=question,
-        context=context,
-        session_id=session_id,
-        app_config_id=app_config_id,
-        classes_info=classes_info,
-    )
+    try:
+        answer = llm_chat.chat(
+            question=question,
+            context=context,
+            session_id=session_id,
+            app_config_id=app_config_id,
+            classes_info=classes_info,
+        )
+    except Exception as e:
+        log.exception("chat: LLM error: %s", e)
+        return jsonify({"error": f"LLM error: {e}"}), 500
+
     return jsonify({"answer": answer})
+
+
+@api.route("/chat/reset", methods=["POST"])
+def chat_reset():
+    """Clear the LLM conversation memory for a given session."""
+    data = request.get_json(silent=True) or {}
+    session_id = (data.get("session_id") or "").strip()
+    if not session_id:
+        return jsonify({"error": "Field 'session_id' is required."}), 400
+    llm_chat.clear_history(session_id)
+    log.info("chat_reset: cleared session %r", session_id)
+    return jsonify({"message": "Session cleared"})
 
 
 def _parse_classes(value: str | dict) -> tuple[dict, list[tuple[int, str, bool, bool]]]:

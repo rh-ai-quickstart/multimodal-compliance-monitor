@@ -141,9 +141,10 @@ class LLMChat:
 
         token = current_app_config_id.set(app_config_id)
         try:
+            _inp = self._build_input(question, context, app_config_id, classes_info)
             response = asyncio.run(
                 self._agent.ainvoke(
-                    self._build_input(question, context, app_config_id, classes_info),
+                    _inp,
                     config={"configurable": {"thread_id": self._thread_id(session_id)}},
                 )
             )
