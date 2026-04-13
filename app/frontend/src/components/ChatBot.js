@@ -29,8 +29,15 @@ const ChatBot = ({ activeConfigId }) => {
     setQuestion('');
 
     try {
+      let description = '';
+      try {
+        const infoRes = await axios.get(`${API_URL}/latest_info`);
+        description = infoRes.data.description || '';
+      } catch (_) { /* proceed without description */ }
+
       const response = await axios.post(`${API_URL}/chat`, {
         question,
+        description,
         app_config_id: activeConfigId,
       });
       const answer = response.data.answer;

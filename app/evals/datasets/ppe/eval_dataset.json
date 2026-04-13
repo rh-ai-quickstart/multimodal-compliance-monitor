@@ -2,133 +2,133 @@
   {
     "id": "full_compliance__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "Person: 4, Hardhat: 4, Safety Vest: 4, Mask: 4 Summary: 4 workers on screen. 4 wearing hardhats, 0 without. 4 wearing vests, 0 without.",
+    "description": "Hardhat: 2, NO-Hardhat: 3, NO-Mask: 4, NO-Safety Vest: 3, Person: 4",
     "golden_answer": "There are 4 people currently on the screen. All 4 workers are fully compliant, wearing hardhats, safety vests, and masks."
   },
   {
     "id": "full_compliance__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "Person: 4, Hardhat: 4, Safety Vest: 4, Mask: 4 Summary: 4 workers on screen. 4 wearing hardhats, 0 without. 4 wearing vests, 0 without.",
+    "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
     "golden_answer": "4 workers are wearing safety vests right now. All workers on screen are compliant with vest requirements."
   },
   {
     "id": "zero_compliance__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "Person: 3, NO-Hardhat: 3, NO-Safety Vest: 3, NO-Mask: 3 Summary: 3 workers on screen. 0 wearing hardhats, 3 without. 0 wearing vests, 3 without.",
+    "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
     "golden_answer": "There are 3 people currently on the screen. None of them are wearing any PPE — all 3 are missing hardhats, safety vests, and masks."
   },
   {
     "id": "zero_compliance__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "Person: 3, NO-Hardhat: 3, NO-Safety Vest: 3, NO-Mask: 3 Summary: 3 workers on screen. 0 wearing hardhats, 3 without. 0 wearing vests, 3 without.",
+    "description": "NO-Hardhat: 2, NO-Mask: 2, NO-Safety Vest: 2, Person: 2",
     "golden_answer": "0 workers are wearing safety vests right now. All 3 workers on screen are missing their safety vests."
   },
   {
     "id": "mixed_compliance__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "Person: 5, Hardhat: 3, NO-Hardhat: 2, Safety Vest: 4, NO-Safety Vest: 1, Mask: 2, NO-Mask: 3 Summary: 5 workers on screen. 3 wearing hardhats, 2 without. 4 wearing vests, 1 without.",
+    "description": "Hardhat: 1, Mask: 1, NO-Hardhat: 2, NO-Mask: 1, NO-Safety Vest: 2, Person: 3",
     "golden_answer": "There are 5 people currently on the screen. It is a mixed compliance situation: 3 are wearing hardhats (2 without), 4 are wearing safety vests (1 without), and 2 are wearing masks (3 without)."
   },
   {
     "id": "mixed_compliance__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "Person: 5, Hardhat: 3, NO-Hardhat: 2, Safety Vest: 4, NO-Safety Vest: 1, Mask: 2, NO-Mask: 3 Summary: 5 workers on screen. 3 wearing hardhats, 2 without. 4 wearing vests, 1 without.",
+    "description": "Hardhat: 2, Mask: 2, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
     "golden_answer": "4 workers are wearing safety vests right now. 1 worker out of 5 is not wearing a safety vest."
   },
   {
     "id": "single_worker_compliant__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "Person: 1, Hardhat: 1, Safety Vest: 1, Mask: 1 Summary: 1 workers on screen. 1 wearing hardhats, 0 without. 1 wearing vests, 0 without.",
+    "description": "Detected: Hardhat: 2, Mask: 1, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
     "golden_answer": "There is 1 person currently on the screen. The worker is fully compliant, wearing a hardhat, safety vest, and mask."
   },
   {
     "id": "single_worker_compliant__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "Person: 1, Hardhat: 1, Safety Vest: 1, Mask: 1 Summary: 1 workers on screen. 1 wearing hardhats, 0 without. 1 wearing vests, 0 without.",
+    "description": "Hardhat: 2, NO-Hardhat: 3, NO-Mask: 4, NO-Safety Vest: 3, Person: 4",
     "golden_answer": "1 worker is wearing a safety vest right now. The single worker on screen is fully compliant with vest requirements."
   },
   {
     "id": "single_worker_violating__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "Person: 1, NO-Hardhat: 1, NO-Safety Vest: 1, NO-Mask: 1 Summary: 1 workers on screen. 0 wearing hardhats, 1 without. 0 wearing vests, 1 without.",
+    "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
     "golden_answer": "There is 1 person currently on the screen. This worker is not wearing any PPE — missing hardhat, safety vest, and mask."
   },
   {
     "id": "single_worker_violating__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "Person: 1, NO-Hardhat: 1, NO-Safety Vest: 1, NO-Mask: 1 Summary: 1 workers on screen. 0 wearing hardhats, 1 without. 0 wearing vests, 1 without.",
+    "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
     "golden_answer": "0 workers are wearing safety vests right now. The single worker on screen is not wearing a safety vest."
   },
   {
     "id": "crowded_mostly_compliant__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "Person: 12, Hardhat: 10, NO-Hardhat: 2, Safety Vest: 11, NO-Safety Vest: 1, Mask: 9, NO-Mask: 3 Summary: 12 workers on screen. 10 wearing hardhats, 2 without. 11 wearing vests, 1 without.",
+    "description": "NO-Hardhat: 2, NO-Mask: 2, NO-Safety Vest: 2, Person: 2",
     "golden_answer": "There are 12 people currently on the screen. Most workers are compliant: 10 wearing hardhats (2 without), 11 wearing safety vests (1 without), and 9 wearing masks (3 without)."
   },
   {
     "id": "crowded_mostly_compliant__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "Person: 12, Hardhat: 10, NO-Hardhat: 2, Safety Vest: 11, NO-Safety Vest: 1, Mask: 9, NO-Mask: 3 Summary: 12 workers on screen. 10 wearing hardhats, 2 without. 11 wearing vests, 1 without.",
+    "description": "Hardhat: 1, Mask: 1, NO-Hardhat: 2, NO-Mask: 1, NO-Safety Vest: 2, Person: 3",
     "golden_answer": "11 workers are wearing safety vests right now. Only 1 out of 12 workers is missing a safety vest."
   },
   {
     "id": "empty_scene__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "No detections Summary: 0 workers on screen. 0 wearing hardhats, 0 without. 0 wearing vests, 0 without.",
+    "description": "Hardhat: 2, Mask: 2, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
     "golden_answer": "There are 0 people currently on the screen. The scene is empty with no workers detected."
   },
   {
     "id": "empty_scene__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "No detections Summary: 0 workers on screen. 0 wearing hardhats, 0 without. 0 wearing vests, 0 without.",
+    "description": "Detected: Hardhat: 2, Mask: 1, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
     "golden_answer": "0 workers are wearing safety vests right now. There are no workers detected on screen."
   },
   {
     "id": "hardhats_missing__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "Person: 6, NO-Hardhat: 6, Safety Vest: 6 Summary: 6 workers on screen. 0 wearing hardhats, 6 without. 6 wearing vests, 0 without.",
+    "description": "Hardhat: 2, NO-Hardhat: 3, NO-Mask: 4, NO-Safety Vest: 3, Person: 4",
     "golden_answer": "There are 6 people currently on the screen. All 6 workers are wearing safety vests, but none of them are wearing hardhats."
   },
   {
     "id": "hardhats_missing__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "Person: 6, NO-Hardhat: 6, Safety Vest: 6 Summary: 6 workers on screen. 0 wearing hardhats, 6 without. 6 wearing vests, 0 without.",
+    "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
     "golden_answer": "6 workers are wearing safety vests right now. All workers on screen are compliant with vest requirements, though none are wearing hardhats."
   },
   {
     "id": "vests_missing__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "Person: 4, Hardhat: 4, NO-Safety Vest: 4 Summary: 4 workers on screen. 4 wearing hardhats, 0 without. 0 wearing vests, 4 without.",
+    "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
     "golden_answer": "There are 4 people currently on the screen. All 4 workers are wearing hardhats, but none of them are wearing safety vests."
   },
   {
     "id": "vests_missing__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "Person: 4, Hardhat: 4, NO-Safety Vest: 4 Summary: 4 workers on screen. 4 wearing hardhats, 0 without. 0 wearing vests, 4 without.",
+    "description": "NO-Hardhat: 2, NO-Mask: 2, NO-Safety Vest: 2, Person: 2",
     "golden_answer": "0 workers are wearing safety vests right now. All 4 workers on screen are missing their safety vests, though they are all wearing hardhats."
   },
   {
     "id": "masks_only_issue__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "Person: 8, Hardhat: 8, Safety Vest: 8, NO-Mask: 8 Summary: 8 workers on screen. 8 wearing hardhats, 0 without. 8 wearing vests, 0 without.",
+    "description": "Hardhat: 1, Mask: 1, NO-Hardhat: 2, NO-Mask: 1, NO-Safety Vest: 2, Person: 3",
     "golden_answer": "There are 8 people currently on the screen. All 8 workers are wearing hardhats and safety vests, but none are wearing masks."
   },
   {
     "id": "masks_only_issue__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "Person: 8, Hardhat: 8, Safety Vest: 8, NO-Mask: 8 Summary: 8 workers on screen. 8 wearing hardhats, 0 without. 8 wearing vests, 0 without.",
+    "description": "Hardhat: 2, Mask: 2, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
     "golden_answer": "8 workers are wearing safety vests right now. All workers on screen are compliant with vest requirements."
   },
   {
     "id": "near_perfect__people_on_screen",
     "question": "How many people on the screen now?",
-    "description": "Person: 10, Hardhat: 9, NO-Hardhat: 1, Safety Vest: 10, Mask: 10 Summary: 10 workers on screen. 9 wearing hardhats, 1 without. 10 wearing vests, 0 without.",
+    "description": "Detected: Hardhat: 2, Mask: 1, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
     "golden_answer": "There are 10 people currently on the screen. Compliance is near-perfect: 9 are wearing hardhats (1 without), and all 10 are wearing safety vests and masks."
   },
   {
     "id": "near_perfect__vest_count",
     "question": "How many workers are wearing safety vests right now?",
-    "description": "Person: 10, Hardhat: 9, NO-Hardhat: 1, Safety Vest: 10, Mask: 10 Summary: 10 workers on screen. 9 wearing hardhats, 1 without. 10 wearing vests, 0 without.",
+    "description": "NO-Hardhat: 2, NO-Mask: 2, NO-Safety Vest: 2, Person: 2",
     "golden_answer": "10 workers are wearing safety vests right now. All workers on screen are compliant with vest requirements."
   }
 ]
