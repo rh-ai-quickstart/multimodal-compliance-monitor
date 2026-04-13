@@ -17,6 +17,7 @@ Requires env vars: OPENAI_API_ENDPOINT, OPENAI_API_TOKEN, OPENAI_MODEL.
 Optionally set BACKEND_URL (default http://localhost:8888).
 """
 
+import asyncio
 import json
 import os
 import sys
@@ -71,6 +72,25 @@ def call_chat(question: str, description: str, session_id: str) -> str:
         return json.loads(resp.read())["answer"]
 
 
+async def _fetch_one(entry: dict) -> tuple[dict, str | None, str | None]:
+    """Return (entry, actual_output, error_str)."""
+    try:
+        output = await asyncio.to_thread(
+            call_chat,
+            entry["question"],
+            entry["description"],
+            session_id=entry["id"],
+        )
+        return entry, output, None
+    except Exception as exc:
+        return entry, None, str(exc)
+
+
+async def _fetch_all(dataset: list[dict]) -> list[tuple[dict, str | None, str | None]]:
+    tasks = [_fetch_one(entry) for entry in dataset]
+    return await asyncio.gather(*tasks)
+
+
 def run() -> None:
     dataset = load_dataset()
     judge = VLLMJudge()
@@ -90,19 +110,15 @@ def run() -> None:
         threshold=THRESHOLD,
     )
 
+    print(f"Sending {len(dataset)} chat requests concurrently ...")
+    fetch_results = asyncio.run(_fetch_all(dataset))
+
     results: list[dict] = []
+    test_cases: list[tuple[dict, LLMTestCase, str]] = []
 
-    for entry in dataset:
-        entry_id = entry["id"]
-        question = entry["question"]
-        description = entry["description"]
-        golden_answer = entry["golden_answer"]
-
-        print(f"[{entry_id}] Calling chat endpoint ... ", end="", flush=True)
-        try:
-            actual_output = call_chat(question, description, session_id=entry_id)
-        except Exception as exc:
-            print(f"ERROR: {exc}")
+    for entry, actual_output, error in fetch_results:
+        if error:
+            print(f"[{entry['id']}] ERROR: {error}")
             results.append(
                 {
                     **entry,
@@ -110,22 +126,24 @@ def run() -> None:
                     "judge_score": 0.0,
                     "judge_reason": None,
                     "passed": False,
-                    "error": str(exc),
+                    "error": error,
                 }
             )
             continue
-
-        test_case = LLMTestCase(
-            input=question,
+        tc = LLMTestCase(
+            input=entry["question"],
             actual_output=actual_output,
-            expected_output=golden_answer,
+            expected_output=entry["golden_answer"],
         )
+        test_cases.append((entry, tc, actual_output))
 
-        correctness.measure(test_case)
+    for entry, tc, actual_output in test_cases:
+        correctness.measure(tc)
         passed = correctness.score >= THRESHOLD
         reason = getattr(correctness, "reason", None)
-        print(f"score={correctness.score:.2f}  {'PASS' if passed else 'FAIL'}")
-
+        print(
+            f"[{entry['id']}] score={correctness.score:.2f}  {'PASS' if passed else 'FAIL'}"
+        )
         results.append(
             {
                 **entry,
