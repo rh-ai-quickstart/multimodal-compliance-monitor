@@ -160,21 +160,23 @@ body {
     flex-grow: 1;
     overflow: hidden;
     padding-top: 70px; /* Add this line to make room for logos */
+  min-height: 0;
   }
 
   .content-wrapper.three-column {
     display: flex;
     flex-direction: row;
-    gap: 16px;
+  gap: clamp(10px, 1.2vw, 16px);
   }
 
   .source-column {
-    flex: 0 0 40%;
-    min-width: 400px;
-    max-width: 480px;
+  flex: 0 1 clamp(260px, 32vw, 460px);
+  min-width: 240px;
+  max-width: 100%;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+  min-height: 0;
   }
 
   .main-column {
@@ -183,12 +185,13 @@ body {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+  min-height: 0;
   }
 
   .chat-column {
-    flex: 0 0 30%;
-    min-width: 220px;
-    max-width: 360px;
+  flex: 0 1 clamp(250px, 28vw, 360px);
+  min-width: 220px;
+  max-width: 100%;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -198,6 +201,9 @@ body {
   .chat-column .chatbot {
     flex: 1;
     min-height: 0;
+    width: 100%;
+    padding: 0;
+    box-sizing: border-box;
   }
   
   .left-content {
@@ -216,27 +222,38 @@ body {
     overflow: hidden;
   }
   
-  @media (max-width: 1200px) {
+@media (max-width: 1280px) {
+  .source-column {
+    flex-basis: clamp(240px, 36vw, 380px);
+  }
+
+  .chat-column {
+    flex-basis: clamp(220px, 32vw, 320px);
+  }
+}
+
+@media (max-width: 1024px) {
     .content-wrapper.three-column {
       flex-direction: column;
+    gap: 12px;
     }
 
     .source-column,
     .main-column,
     .chat-column {
-      max-width: 100%;
-      min-width: 100%;
-    }
-  }
-
-  @media (max-width: 1200px) {
-    .content-wrapper {
-      flex-direction: column;
-    }
-
-  .left-content,
-  .right-content {
-    max-width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     width: 100%;
+    max-width: 100%;
+    }
+
+  .chat-column .chatbot {
+    min-height: 280px;
+  }
+}
+
+@media (max-width: 640px) {
+  .content-wrapper {
+    padding-top: 56px;
   }
 }

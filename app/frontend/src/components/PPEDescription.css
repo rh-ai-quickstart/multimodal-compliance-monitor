@@ -2,12 +2,13 @@
     background-color: #000000;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1);
-    padding: 20px;
-    margin-bottom: 20px;
+    padding: clamp(12px, 1.8vw, 20px);
+    margin-bottom: clamp(10px, 1.8vw, 20px);
     color: #ffffff;
-    max-height: calc(100vh - 100px); /* Adjust based on your layout */
+    max-height: none;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .description-section,
@@ -30,7 +31,7 @@
 }
 
 h3 {
-    font-size: 1.2em;
+    font-size: clamp(1rem, 1.1vw, 1.2rem);
     margin-bottom: 10px;
     padding-bottom: 5px;
     border-bottom: 2px solid #ffffff;
@@ -52,7 +53,7 @@ h3 {
     white-space: pre-wrap;
     word-break: break-word;
     color: #ffffff;
-    max-height: 100px; /* Adjust as needed */
+    max-height: 160px;
     overflow-y: auto;
 }
 
@@ -105,4 +106,21 @@ h3 {
 .summary-feed::-webkit-scrollbar-thumb:hover,
 .detection-info::-webkit-scrollbar-thumb:hover {
     background: #333333;
+}
+
+@media (max-width: 640px) {
+    .description-section,
+    .summary-section {
+        margin-bottom: 12px;
+        padding: 10px;
+    }
+
+    .detection-info {
+        max-height: 140px;
+        font-size: 0.84rem;
+    }
+
+    .safety-trends pre {
+        font-size: 0.82rem;
+    }
 }

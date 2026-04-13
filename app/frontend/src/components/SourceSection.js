@@ -19,7 +19,7 @@ const getThumbnailPath = (videoPath) => {
   return base ? `${base}/thumbnails/${stem}.jpg` : `/thumbnails/${stem}.jpg`;
 };
 
-const SourceSection = ({ configs, selectedConfigId, onSelectConfig }) => {
+const SourceSection = ({ configs, selectedConfigId, onSelectConfig, onAddVideo }) => {
   const rtspConfigs = configs.filter((c) => isRtspUrl(c.video_source));
   const mp4Configs = configs.filter((c) => isFileVideo(c.video_source));
 
@@ -93,6 +93,10 @@ const SourceSection = ({ configs, selectedConfigId, onSelectConfig }) => {
           )}
         </div>
       </div>
+
+      <button type="button" className="source-add-video-btn" onClick={onAddVideo}>
+        + Add New Video Source
+      </button>
     </div>
   );
 };

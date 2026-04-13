@@ -1,38 +1,49 @@
 .logo-bar {
-    position: absolute;
+    position: fixed;
     top: 20px;
-    right: 20px;
+    left: 22px;
+    right: auto;
     display: flex;
     align-items: center;
-    gap: 20px;
-    z-index: 1000;
-}
-
-.logo-bar-config-btn {
-    padding: 8px 16px;
-    background-color: #333;
-    color: #fff;
-    border: 1px solid #555;
-    border-radius: 4px;
-    font-size: 14px;
-    cursor: pointer;
-}
-
-.logo-bar-config-btn:hover {
-    background-color: #0071c5;
-    border-color: #0060a8;
+    gap: 0;
+    z-index: 1100;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    backdrop-filter: none;
 }
 
 .logo {
-    height: 50px;
+    height: 36px;
     width: auto;
     object-fit: contain;
 }
 
 .redhat-logo {
-    height: 50px; /* Adjust if needed */
+    height: 36px;
 }
 
 .intel-logo {
     height: 50px; /* Adjust if needed */
+}
+
+@media (max-width: 900px) {
+    .logo-bar {
+        position: fixed;
+        top: 10px;
+        left: 16px;
+        right: auto;
+        justify-content: flex-end;
+        gap: 0;
+        margin-bottom: 0;
+        flex-wrap: wrap;
+        padding: 0;
+    }
+
+    .logo,
+    .redhat-logo,
+    .intel-logo {
+        height: 30px;
+    }
 }

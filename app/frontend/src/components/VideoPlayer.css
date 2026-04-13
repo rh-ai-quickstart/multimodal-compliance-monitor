@@ -49,7 +49,7 @@
  */
 .video-feed-frame {
   position: relative;
-  width: min(100%, calc(50vh * 16 / 9));
+  width: 100%;
   margin-inline: auto;
   aspect-ratio: 16 / 9;
   background-color: #0a0a0a;

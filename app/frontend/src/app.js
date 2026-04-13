@@ -9,10 +9,8 @@ import SourceSection from './components/SourceSection';
 import { API_URL } from './config';
 import './App.css';
 import './App.custom.css';
-import architectureDiagram from './itap-demo.png'; // Make sure this path is correct
 
 function App() {
-  const [showDiagram, setShowDiagram] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [configs, setConfigs] = useState([]);
   const [selectedConfigId, setSelectedConfigId] = useState(null);
@@ -53,24 +51,10 @@ function App() {
     fetchConfigs();
   };
 
-  const toggleDiagram = () => {
-    setShowDiagram(!showDiagram);
-  };
-
   return (
     <div className="App">
-      <button className="diagram-toggle" onClick={toggleDiagram}>
-        Architecture Diagram
-      </button>
-      
-      {showDiagram && (
-        <div className="diagram-overlay">
-          <img src={architectureDiagram} alt="Architecture Diagram" />
-        </div>
-      )}
-
       <ConfigModal isOpen={showConfig} onClose={handleConfigModalClose} />
-      <LogoBar onConfigClick={() => setShowConfig(true)} />
+      <LogoBar />
       <h1 className="main-title">
         Multi Modal and Multi Model Monitoring System
       </h1>
@@ -80,6 +64,7 @@ function App() {
             configs={configs}
             selectedConfigId={selectedConfigId}
             onSelectConfig={handleSelectConfig}
+            onAddVideo={() => setShowConfig(true)}
           />
         </aside>
         <main className="main-column">

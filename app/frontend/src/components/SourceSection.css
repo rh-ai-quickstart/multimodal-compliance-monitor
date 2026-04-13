@@ -1,27 +1,32 @@
 .source-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 12px;
-  background-color: #1f1f1f;
-  border: 1px solid #444;
-  border-radius: 4px;
-  min-width: 180px;
+  gap: 14px;
+  padding: 14px;
+  background: linear-gradient(160deg, #161b27 0%, #0f1320 100%);
+  border: 1px solid #2b3550;
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  min-width: 0;
 }
 
 .source-section-title {
   margin: 0 0 4px 0;
-  font-size: 12px;
-  font-weight: bold;
-  color: #0071c5;
-  text-align: center;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #d8e7ff;
+  text-align: left;
 }
 
 .source-box-label {
   display: block;
-  font-size: 10px;
-  color: #888;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #9cb0d8;
   margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .source-rtsp-box {
@@ -31,29 +36,30 @@
 
 .source-rtsp-select {
   width: 100%;
-  padding: 8px 10px;
-  background-color: #2a2a2a;
-  border: 1px solid #555;
-  color: #fff;
-  font-size: 11px;
-  border-radius: 2px;
+  padding: 10px 12px;
+  background-color: #121a2b;
+  border: 1px solid #304160;
+  color: #e6efff;
+  font-size: 0.82rem;
+  border-radius: 8px;
   font-family: monospace;
 }
 
 .source-rtsp-select:focus {
   outline: none;
-  border-color: #0071c5;
+  border-color: #4d8fff;
+  box-shadow: 0 0 0 3px rgba(77, 143, 255, 0.18);
 }
 
 .source-or-divider {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 0.72rem;
   font-weight: bold;
-  color: #666;
+  color: #7788b0;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
 }
 
 .source-mp4-box {
@@ -70,35 +76,41 @@
 }
 
 .source-thumbnails-empty {
-  font-size: 11px;
-  color: #555;
+  font-size: 0.8rem;
+  color: #8392b8;
   padding: 16px;
   text-align: center;
+  border: 1px dashed #304160;
+  border-radius: 8px;
+  background-color: rgba(13, 19, 34, 0.45);
 }
 
 .source-thumbnail-btn {
   position: relative;
   width: 100%;
-  max-width: 220px;
+  max-width: 100%;
   height: 96px;
   padding: 0;
-  border: 2px solid #555;
-  border-radius: 4px;
-  background-color: #333;
+  border: 1px solid #334466;
+  border-radius: 10px;
+  background-color: #0f1727;
   cursor: pointer;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .source-thumbnail-btn:hover {
-  border-color: #0071c5;
+  border-color: #5d9cff;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(10, 16, 30, 0.5);
 }
 
 .source-thumbnail-selected {
-  border-color: #0071c5;
-  box-shadow: 0 0 8px rgba(0, 113, 197, 0.5);
+  border-color: #6aa6ff;
+  box-shadow: 0 0 0 2px rgba(96, 160, 255, 0.22), 0 10px 20px rgba(6, 14, 30, 0.5);
 }
 
 .source-thumbnail-btn img {
@@ -108,8 +120,8 @@
 }
 
 .source-thumbnail-fallback {
-  font-size: 9px;
-  color: #666;
+  font-size: 0.68rem;
+  color: #95a7ce;
   text-align: center;
   padding: 4px;
   word-break: break-all;
@@ -121,4 +133,61 @@
 
 .source-thumbnail-btn:has(.source-thumbnail-fallback:not(.source-thumbnail-fallback-hidden)) .source-thumbnail-fallback {
   display: block;
+}
+
+.source-add-video-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #4f78c6;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2f5ca9 0%, #4a88f0 100%);
+  color: #eef5ff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 0.16s ease, filter 0.16s ease;
+}
+
+.source-add-video-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+@media (max-width: 1024px) {
+  .source-section-title {
+    font-size: 14px;
+  }
+
+  .source-box-label,
+  .source-rtsp-select,
+  .source-or-divider {
+    font-size: 12px;
+  }
+
+  .source-thumbnails {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+  }
+
+  .source-thumbnail-btn {
+    height: 110px;
+  }
+}
+
+@media (max-width: 640px) {
+  .source-section {
+    gap: 12px;
+    padding: 10px;
+  }
+
+  .source-thumbnails {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+
+  .source-thumbnail-btn {
+    height: 90px;
+  }
 }

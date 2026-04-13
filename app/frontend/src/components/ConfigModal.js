@@ -150,14 +150,14 @@ const ConfigModal = ({ isOpen, onClose }) => {
     <div className="config-modal-overlay" onClick={handleClose}>
       <div className="config-modal" onClick={(e) => e.stopPropagation()}>
         <div className="config-modal-header">
-          <h2>Configuration</h2>
+          <h2>Add New Video Source</h2>
           <button className="config-modal-close" onClick={handleClose} aria-label="Close">
             &times;
           </button>
         </div>
 
         <div className="config-form">
-          <h3>Add Configuration</h3>
+          <h3>Source Configuration</h3>
 
           <div className="config-field">
             <label>Model URL (OVMS endpoint)</label>

@@ -10,10 +10,10 @@ WORKDIR /backend
 
 COPY --from=ghcr.io/astral-sh/uv:0.9.7 /uv /uvx /bin/
 
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml ./
 
 # Install dependencies
-RUN uv sync --locked
+RUN mkdir -p /tmp/.cache/uv && UV_CACHE_DIR=/tmp/.cache/uv uv sync
 
 
 COPY ./ ./
