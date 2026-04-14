@@ -1,42 +1,63 @@
+from __future__ import annotations
+
 import asyncio
 import os
 from typing import Generator
 
+from langchain_core.messages import AIMessageChunk, HumanMessage
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, AIMessageChunk, SystemMessage
-from langchain.agents import create_agent
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
 
-from tools.mcp_tools import load_tools, current_app_config_id
+from chat.nodes import (
+    make_clarifier_node,
+    make_context_answer_node,
+    make_router_node,
+    make_sql_agent_node,
+    make_sql_answer_node,
+    make_sql_planner_node,
+)
+from chat.state import ChatState
 from logger import get_logger
+from tools.mcp_tools import current_app_config_id, load_sql_tool_only
 
 log = get_logger(__name__)
 
-SYSTEM_PROMPT = (
-    "You are a terse monitoring assistant for a configurable object-detection system.\n\n"
-    "Scope (reject anything else with a one-line refusal):\n"
-    "- Object/detection counts, rates, and class breakdowns\n"
-    "- Compliance or attribute statistics\n"
-    "- Brief summaries and recommendations\n\n"
-    "Tool usage:\n"
-    "- Use tools ONLY for historical/past questions with a timeframe, e.g.:\n"
-    '  "How many violations were there in the last hour?"\n'
-    '  "What was the hardhat compliance rate yesterday?"\n'
-    '  "Show detection counts for the past 30 minutes."\n'
-    "- NEVER use tools for present-tense questions, e.g.:\n"
-    '  "How many people on the screen?" "Who is wearing a vest?" "how many birds?"\n'
-    "  Answer these from the provided context only.\n"
-    "- When querying, inspect the schema first to understand table structure.\n\n"
-    "Response rules:\n"
-    "- Prefer numbers and percentages over prose.\n"
-    "- No greetings or filler.\n"
-    "- 1-3 short sentences max.\n"
-    "- Never mention queries, rows, databases, or methodology."
-)
+
+def _route_after_router(state: ChatState) -> str:
+    return state["route"]
+
+
+def _build_graph(llm: ChatOpenAI, sql_tools: list) -> StateGraph:
+    graph = StateGraph(ChatState)
+
+    graph.add_node("clarifier", make_clarifier_node(llm))
+    graph.add_node("router", make_router_node(llm))
+    graph.add_node("context_answer", make_context_answer_node(llm))
+    graph.add_node("sql_planner", make_sql_planner_node(llm))
+    graph.add_node("sql_agent", make_sql_agent_node(llm, sql_tools))
+    graph.add_node("sql_answer", make_sql_answer_node(llm))
+
+    graph.add_edge(START, "clarifier")
+    graph.add_edge("clarifier", "router")
+    graph.add_conditional_edges(
+        "router",
+        _route_after_router,
+        {"context": "context_answer", "sql": "sql_planner"},
+    )
+    graph.add_edge("sql_planner", "sql_agent")
+    graph.add_edge("sql_agent", "sql_answer")
+    graph.add_edge("context_answer", END)
+    graph.add_edge("sql_answer", END)
+
+    return graph
 
 
 class LLMChat:
-    """Conversational LLM backed by a VLLM-served OpenAI-compatible endpoint.
+    """Conversational LLM backed by a LangGraph router pipeline.
+
+    Routes present-tense questions to a context-only answerer, and
+    historical questions through a SQL planner -> agent -> answer chain.
 
     Maintains per-session chat history so the model sees the full conversation.
     """
@@ -55,22 +76,18 @@ class LLMChat:
             streaming=True,
         )
 
-        tools = asyncio.run(load_tools())
+        sql_tools = asyncio.run(load_sql_tool_only())
 
         self._memory = MemorySaver()
-        self._agent = create_agent(
-            llm,
-            tools,
-            system_prompt=SYSTEM_PROMPT,
-            checkpointer=self._memory,
-        )
+        graph = _build_graph(llm, sql_tools)
+        self._app = graph.compile(checkpointer=self._memory)
         self._session_versions: dict[str, int] = {}
 
         log.info(
-            "LLMChat initialised — endpoint=%s, model=%s, mcp_tools=%d",
+            "LLMChat initialised — endpoint=%s, model=%s, sql_tools=%d",
             endpoint,
             model,
-            len(tools),
+            len(sql_tools),
         )
 
     def _thread_id(self, session_id: str) -> str:
@@ -83,24 +100,17 @@ class LLMChat:
         context: str,
         app_config_id: int | None = None,
         classes_info: list[dict] | None = None,
-    ) -> dict:
-        messages: list = []
-        if app_config_id is not None:
-            constraint = (
-                f"IMPORTANT: The user is viewing app_config id={app_config_id}. "
-                f"ALL SQL queries MUST join or filter through "
-                f"detection_classes.app_config_id = {app_config_id}. "
-                f"Never query data from other configs.\n"
-            )
-            if classes_info:
-                class_lines = ", ".join(
-                    f"{c['name']} (trackable={c['trackable']})" for c in classes_info
-                )
-                constraint += f"Detection classes for this config: {class_lines}\n"
-            messages.append(SystemMessage(content=constraint))
-        messages.append(SystemMessage(content=f"The user sees right now:\n{context}"))
-        messages.append(HumanMessage(content=f"User question: {question}"))
-        return {"messages": messages}
+    ) -> ChatState:
+        return {
+            "messages": [HumanMessage(content=question)],
+            "question": question,
+            "context": context,
+            "route": "",
+            "app_config_id": app_config_id,
+            "classes_info": classes_info,
+            "metrics": [],
+            "sql_result": "",
+        }
 
     def chat(
         self,
@@ -110,12 +120,10 @@ class LLMChat:
         app_config_id: int | None = None,
         classes_info: list[dict] | None = None,
     ) -> str:
-        """Send a question with context through the conversational agent.
+        """Send a question through the router pipeline.
 
         Every prior exchange in *session_id* is automatically included so the
         model can reference earlier questions and answers.
-
-        Uses ainvoke because MCP tools are async-only.
         """
         log.info(
             "chat called: question=%r, session_id=%r, app_config_id=%r, context_len=%d, context=%r",
@@ -128,10 +136,10 @@ class LLMChat:
 
         token = current_app_config_id.set(app_config_id)
         try:
-            _inp = self._build_input(question, context, app_config_id, classes_info)
+            inp = self._build_input(question, context, app_config_id, classes_info)
             response = asyncio.run(
-                self._agent.ainvoke(
-                    _inp,
+                self._app.ainvoke(
+                    inp,
                     config={"configurable": {"thread_id": self._thread_id(session_id)}},
                 )
             )
@@ -151,13 +159,11 @@ class LLMChat:
 
         Conversation history is updated automatically once the full stream
         has been consumed.
-
-        Uses astream because MCP tools are async-only.
         """
 
         async def _astream():
             chunks = []
-            async for msg, _metadata in self._agent.astream(
+            async for msg, _metadata in self._app.astream(
                 self._build_input(question, context, app_config_id, classes_info),
                 config={"configurable": {"thread_id": self._thread_id(session_id)}},
                 stream_mode="messages",

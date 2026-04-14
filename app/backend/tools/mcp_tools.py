@@ -78,3 +78,15 @@ async def load_tools():
         else:
             wrapped.append(tool)
     return wrapped
+
+
+async def load_sql_tool_only():
+    """Load only the wrapped ``execute_sql`` tool, dropping all others."""
+    all_tools = await load_tools()
+    sql_tools = [t for t in all_tools if t.name == "execute_sql"]
+    if not sql_tools:
+        raise RuntimeError("execute_sql tool not found in postgres-mcp tools")
+    log.info(
+        "Loaded execute_sql tool only (filtered %d other tools)", len(all_tools) - 1
+    )
+    return sql_tools
