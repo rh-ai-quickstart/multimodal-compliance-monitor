@@ -36,7 +36,6 @@ def build_sql_agent_prompt(
         checklist = "\n".join(f"  {i + 1}. {m}" for i, m in enumerate(metrics))
         parts.append(
             f"\nMetrics to fetch (query each one):\n{checklist}\n\n"
-            "Return a short structured summary with each metric and its value."
         )
 
     return "".join(parts)
