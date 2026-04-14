@@ -185,6 +185,7 @@ body {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    overflow-x: hidden;
   min-height: 0;
   }
 
@@ -195,6 +196,9 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    align-self: flex-start;
+    height: 640px;
+    max-height: calc(100dvh - 170px);
     min-height: 0;
   }
 
@@ -245,6 +249,8 @@ body {
     min-width: 0;
     width: 100%;
     max-width: 100%;
+    height: auto;
+    max-height: none;
     }
 
   .chat-column .chatbot {

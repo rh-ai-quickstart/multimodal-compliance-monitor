@@ -9,6 +9,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    box-sizing: border-box;
 }
 
 .description-section,
@@ -16,6 +17,7 @@
     margin-bottom: 20px;
     padding: 15px;
     border-radius: 8px;
+    box-sizing: border-box;
 }
 
 .description-section {
@@ -55,12 +57,15 @@ h3 {
     color: #ffffff;
     max-height: 160px;
     overflow-y: auto;
+    box-sizing: border-box;
 }
 
 .summary-feed {
     flex-grow: 1;
     overflow-y: auto;
     padding-right: 10px; /* Add some padding for the scrollbar */
+    box-sizing: border-box;
+    min-width: 0;
 }
 
 .safety-trends {
@@ -70,6 +75,9 @@ h3 {
     padding: 15px;
     margin-bottom: 10px;
     transition: all 0.3s ease;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
 }
 
 .safety-trends pre {

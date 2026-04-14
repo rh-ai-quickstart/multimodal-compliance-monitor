@@ -12,6 +12,7 @@ body, html {
     radial-gradient(circle at 85% 0%, rgba(157, 52, 73, 0.2), transparent 32%),
     #070b14;
   min-height: 100dvh;
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: clamp(10px, 2vw, 20px);
@@ -53,7 +54,8 @@ body, html {
   margin-top: clamp(10px, 1.6vw, 20px);
   flex-grow: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .diagram-toggle {

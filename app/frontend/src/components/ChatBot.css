@@ -58,15 +58,19 @@
   padding: 10px;
   background-color: #1a1a1a;
   border-top: 1px solid #333333;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .chat-form input {
-  flex-grow: 1;
+  flex: 1 1 auto;
+  width: 0;
   padding: 8px 10px;
   min-height: 38px;
   border: 1px solid #333333;
   border-radius: 10px;
   min-width: 0;
+  margin-right: 0;
   background-color: #262626;
   color: #ffffff;
   box-sizing: border-box;
@@ -77,6 +81,7 @@
 }
 
 .chat-form button {
+  flex: 0 0 auto;
   padding: 8px 14px;
   min-height: 38px;
   background: linear-gradient(135deg, #2f5ca9 0%, #4a88f0 100%);
@@ -87,6 +92,11 @@
   cursor: pointer;
   white-space: nowrap;
   transition: filter 0.16s ease, transform 0.16s ease;
+}
+
+/* Prevent generic app-level chat styles from causing overflow in this panel. */
+.chatbot .chat-form input {
+  margin-right: 0;
 }
 
 .chat-form button:hover {
