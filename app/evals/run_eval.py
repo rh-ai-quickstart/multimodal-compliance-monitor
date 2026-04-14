@@ -22,10 +22,11 @@ import json
 import os
 import sys
 import urllib.request
-import urllib.error
 from datetime import datetime
 from pathlib import Path
 
+from deepeval import evaluate
+from deepeval.evaluate import AsyncConfig, DisplayConfig
 from deepeval.metrics import GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
@@ -41,6 +42,13 @@ DATASET_PATH = Path(__file__).parent / "datasets" / EVAL_DATASET / "eval_dataset
 SEED_SQL_PATH = Path(__file__).parent / "db_seed_data.sql"
 PREDS_DIR = Path(__file__).parent / "preds" / EVAL_DATASET
 
+DATASET_APP_CONFIG_ID: dict[str, int] = {
+    "bird": 1,
+    "ppe": 2,
+    "yolov8n": 3,
+}
+APP_CONFIG_ID = DATASET_APP_CONFIG_ID.get(EVAL_DATASET)
+
 
 def load_dataset() -> list[dict]:
     if not DATASET_PATH.exists():
@@ -55,13 +63,14 @@ def load_dataset() -> list[dict]:
 
 
 def call_chat(question: str, description: str, session_id: str) -> str:
-    payload = json.dumps(
-        {
-            "question": question,
-            "description": description,
-            "session_id": session_id,
-        }
-    ).encode()
+    body: dict = {
+        "question": question,
+        "description": description,
+        "session_id": session_id,
+    }
+    if APP_CONFIG_ID is not None:
+        body["app_config_id"] = APP_CONFIG_ID
+    payload = json.dumps(body).encode()
     req = urllib.request.Request(
         CHAT_ENDPOINT,
         data=payload,
@@ -98,11 +107,15 @@ def run() -> None:
     correctness = GEval(
         name="Correctness",
         criteria=(
-            "Does the golden and the acual are predicted the same value?"
-            "details matching the expected output. Minor wording differences "
-            "are acceptable."
+            "The actual output must directly answer the input question and "
+            "convey the same factual information as the expected output. "
+            "Most important score factor is the actual output asnwering the main question of the input question same as the expected output. "
+            "All numerical values and yes/no conclusions must match. "
+            "Minor wording or phrasing differences are acceptable "
+            "as long as the facts and overall conclusion are equivalent."
         ),
         evaluation_params=[
+            LLMTestCaseParams.INPUT,
             LLMTestCaseParams.ACTUAL_OUTPUT,
             LLMTestCaseParams.EXPECTED_OUTPUT,
         ],
@@ -137,23 +150,32 @@ def run() -> None:
         )
         test_cases.append((entry, tc, actual_output))
 
-    for entry, tc, actual_output in test_cases:
-        correctness.measure(tc)
-        passed = correctness.score >= THRESHOLD
-        reason = getattr(correctness, "reason", None)
-        print(
-            f"[{entry['id']}] score={correctness.score:.2f}  {'PASS' if passed else 'FAIL'}"
+    if test_cases:
+        tc_list = [tc for _, tc, _ in test_cases]
+        eval_result = evaluate(
+            test_cases=tc_list,
+            metrics=[correctness],
+            async_config=AsyncConfig(max_concurrent=10, throttle_value=0),
+            display_config=DisplayConfig(print_results=False),
         )
-        results.append(
-            {
-                **entry,
-                "predicted": actual_output,
-                "judge_score": correctness.score,
-                "judge_reason": reason,
-                "passed": passed,
-                "error": None,
-            }
-        )
+        for (entry, _tc, actual_output), test_result in zip(
+            test_cases, eval_result.test_results
+        ):
+            metric = test_result.metrics_data[0]
+            score = metric.score if metric.score is not None else 0.0
+            passed = score >= THRESHOLD
+            reason = metric.reason
+            print(f"[{entry['id']}] score={score:.2f}  {'PASS' if passed else 'FAIL'}")
+            results.append(
+                {
+                    **entry,
+                    "predicted": actual_output,
+                    "judge_score": score,
+                    "judge_reason": reason,
+                    "passed": passed,
+                    "error": metric.error,
+                }
+            )
 
     print_summary(results)
     save_results(results)
@@ -198,11 +220,17 @@ def save_results(results: list[dict]) -> None:
     }
 
     PREDS_DIR.mkdir(parents=True, exist_ok=True)
+    for parent in [PREDS_DIR] + list(PREDS_DIR.parents):
+        try:
+            parent.chmod(0o777)
+        except OSError:
+            break
     filename = f"results_{now.strftime('%Y-%m-%dT%H-%M-%S')}.json"
     path = PREDS_DIR / filename
 
     with open(path, "w") as f:
         json.dump(output, f, indent=2, default=str)
+    path.chmod(0o666)
 
     print(f"\nResults saved to: {path}")
 
