@@ -1,4 +1,5 @@
 import cv2
+import json
 import numpy as np
 import os
 import tempfile
@@ -14,12 +15,13 @@ from multiprocessing.shared_memory import SharedMemory
 from minio_client import download_file
 from database import (
     init_database,
-    insert_detection_track,
-    update_detection_track_last_seen,
-    insert_detection_observation,
     get_detection_classes_pipeline_maps,
     get_all_configs,
     get_config_by_id,
+    DbWriterThread,
+    OP_INSERT_TRACK,
+    OP_UPDATE_LAST_SEEN,
+    OP_INSERT_OBSERVATION,
 )
 from logger import get_logger
 from response import process_detections
@@ -217,6 +219,9 @@ def _inference_process_target(
     include_in_counts_by_class_id: dict[int, bool] = {}
     trackable_by_class_id: dict[int, bool] = {}
     detection_class_name_to_id: dict[str, int] = {}
+
+    db_writer = DbWriterThread()
+    db_writer.start()
 
     def reset_tracking_state() -> None:
         nonlocal description_buffer, frame_count, person_history, person_last_state
@@ -467,11 +472,11 @@ def _inference_process_target(
                     tname = track_det_class.get(track_id)
                     dcid = detection_class_name_to_id.get(tname) if tname else None
                     if dcid is not None:
-                        insert_detection_track(track_id, dcid, now, now)
+                        db_writer.enqueue(OP_INSERT_TRACK, (track_id, dcid, now, now))
                 else:
                     person_history[track_id]["last_seen"] = now
                     if do_last_seen_db_update:
-                        update_detection_track_last_seen(track_id, now)
+                        db_writer.enqueue(OP_UPDATE_LAST_SEEN, (now, track_id))
 
                 ppe_status = _associate_ppe_to_person(person_bbox, detections)
                 current_state = (
@@ -501,10 +506,9 @@ def _inference_process_target(
                             "bbox": person_bbox,
                         }
                     )
-                    insert_detection_observation(
-                        track_id=track_id,
-                        timestamp=now,
-                        attributes=attributes,
+                    db_writer.enqueue(
+                        OP_INSERT_OBSERVATION,
+                        (track_id, now, json.dumps(attributes)),
                     )
                     person_last_state[track_id] = current_state
 
@@ -554,6 +558,7 @@ def _inference_process_target(
             pass
     finally:
         log.info("Inference process: exiting")
+        db_writer.stop(timeout=3.0)
         if shm is not None:
             try:
                 shm.close()

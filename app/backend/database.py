@@ -9,6 +9,8 @@ Schema:
 """
 
 import os
+import queue as queue_mod
+import threading
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -234,6 +236,156 @@ def insert_detection_observation(
             (track_id, timestamp, json.dumps(attributes)),
         )
         conn.commit()
+
+
+# ----- Async DB Writer Thread -----
+
+_INSERT_TRACK_SQL = (
+    "INSERT INTO detection_tracks (track_id, detection_classes_id, first_seen, last_seen) "
+    "VALUES (%s, %s, %s, %s) "
+    "ON CONFLICT (track_id) DO UPDATE SET last_seen = EXCLUDED.last_seen"
+)
+_UPDATE_LAST_SEEN_SQL = "UPDATE detection_tracks SET last_seen = %s WHERE track_id = %s"
+_INSERT_OBSERVATION_SQL = (
+    "INSERT INTO detection_observations (track_id, timestamp, attributes) "
+    "VALUES (%s, %s, %s)"
+)
+
+OP_INSERT_TRACK = "insert_track"
+OP_UPDATE_LAST_SEEN = "update_last_seen"
+OP_INSERT_OBSERVATION = "insert_observation"
+
+_SQL_BY_OP = {
+    OP_INSERT_TRACK: _INSERT_TRACK_SQL,
+    OP_UPDATE_LAST_SEEN: _UPDATE_LAST_SEEN_SQL,
+    OP_INSERT_OBSERVATION: _INSERT_OBSERVATION_SQL,
+}
+
+# Execution order: tracks must exist before observations reference them.
+_OP_ORDER = (OP_INSERT_TRACK, OP_UPDATE_LAST_SEEN, OP_INSERT_OBSERVATION)
+
+
+class DbWriterThread:
+    """Background thread that batches DB writes from a queue.
+
+    The inference loop enqueues lightweight (op, args) tuples via ``enqueue``.
+    A single daemon thread drains the queue in batches, groups by operation
+    type, and executes each group with ``executemany`` inside one transaction.
+    A persistent connection is reused across batches and reconnected on failure.
+    """
+
+    def __init__(self, max_batch: int = 50, poll_timeout: float = 0.05):
+        self._queue: queue_mod.Queue = queue_mod.Queue(maxsize=5000)
+        self._stop = threading.Event()
+        self._max_batch = max_batch
+        self._poll_timeout = poll_timeout
+        self._conn = None
+        self._thread = threading.Thread(
+            target=self._run,
+            name="db-writer",
+            daemon=True,
+        )
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self, timeout: float = 5.0) -> None:
+        self._stop.set()
+        self._thread.join(timeout=timeout)
+
+    def enqueue(self, op: str, args: tuple) -> None:
+        try:
+            self._queue.put_nowait((op, args))
+        except queue_mod.Full:
+            log.warning("DB writer queue full, dropping %s", op)
+
+    # -- internals --
+
+    def _ensure_conn(self):
+        if self._conn is None or self._conn.closed:
+            self._conn = psycopg2.connect(get_connection_string())
+        return self._conn
+
+    def _close_conn(self):
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
+    def _drain_batch(self) -> list[tuple[str, tuple]]:
+        """Block for one item, then greedily pull up to max_batch more."""
+        batch: list[tuple[str, tuple]] = []
+        try:
+            item = self._queue.get(timeout=self._poll_timeout)
+            batch.append(item)
+        except queue_mod.Empty:
+            return batch
+        for _ in range(self._max_batch - 1):
+            try:
+                batch.append(self._queue.get_nowait())
+            except queue_mod.Empty:
+                break
+        return batch
+
+    def _execute_batch(self, batch: list[tuple[str, tuple]]) -> None:
+        groups: dict[str, list[tuple]] = {}
+        for op, args in batch:
+            groups.setdefault(op, []).append(args)
+
+        conn = self._ensure_conn()
+        cursor = conn.cursor()
+        try:
+            for op in _OP_ORDER:
+                rows = groups.get(op)
+                if rows:
+                    cursor.executemany(_SQL_BY_OP[op], rows)
+            conn.commit()
+        except psycopg2.OperationalError:
+            log.warning("DB writer: connection lost, reconnecting")
+            self._close_conn()
+            try:
+                conn = self._ensure_conn()
+                cursor = conn.cursor()
+                for op in _OP_ORDER:
+                    rows = groups.get(op)
+                    if rows:
+                        cursor.executemany(_SQL_BY_OP[op], rows)
+                conn.commit()
+            except Exception:
+                log.exception("DB writer: retry failed, dropping %d items", len(batch))
+                self._close_conn()
+        except Exception:
+            log.exception("DB writer: batch failed, dropping %d items", len(batch))
+            try:
+                conn.rollback()
+            except Exception:
+                self._close_conn()
+
+    def _run(self) -> None:
+        log.info("DB writer thread started")
+        try:
+            while not self._stop.is_set():
+                batch = self._drain_batch()
+                if batch:
+                    self._execute_batch(batch)
+
+            # Drain remaining items after stop signal
+            remaining: list[tuple[str, tuple]] = []
+            while True:
+                try:
+                    remaining.append(self._queue.get_nowait())
+                except queue_mod.Empty:
+                    break
+            if remaining:
+                log.info("DB writer: flushing %d remaining items", len(remaining))
+                self._execute_batch(remaining)
+        except Exception:
+            log.exception("DB writer thread crashed")
+        finally:
+            self._close_conn()
+            log.info("DB writer thread exited")
 
 
 # ----- Detection Classes Operations -----
