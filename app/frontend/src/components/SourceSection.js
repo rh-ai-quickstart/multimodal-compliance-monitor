@@ -19,7 +19,7 @@ const getThumbnailPath = (videoPath) => {
   return base ? `${base}/thumbnails/${stem}.jpg` : `/thumbnails/${stem}.jpg`;
 };
 
-const SourceSection = ({ configs, activeConfigId, onSelectConfig }) => {
+const SourceSection = ({ configs, selectedConfigId, onSelectConfig }) => {
   const rtspConfigs = configs.filter((c) => isRtspUrl(c.video_source));
   const mp4Configs = configs.filter((c) => isFileVideo(c.video_source));
 
@@ -42,7 +42,7 @@ const SourceSection = ({ configs, activeConfigId, onSelectConfig }) => {
         </label>
         <select
           id="rtsp-select"
-          value={activeConfigId && rtspConfigs.some((c) => c.id === activeConfigId) ? activeConfigId : ''}
+          value={selectedConfigId && rtspConfigs.some((c) => c.id === selectedConfigId) ? selectedConfigId : ''}
           onChange={handleRtspChange}
           className="source-rtsp-select"
         >
@@ -65,7 +65,7 @@ const SourceSection = ({ configs, activeConfigId, onSelectConfig }) => {
           ) : (
             mp4Configs.map((c) => {
               const thumbPath = getThumbnailPath(c.video_source);
-              const isSelected = activeConfigId === c.id;
+              const isSelected = selectedConfigId === c.id;
               return (
                 <button
                   key={c.id}
