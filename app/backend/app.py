@@ -14,7 +14,7 @@ from minio_client import (
     object_exists,
 )
 from multimodel import MultiModalAIDemo
-from llm import LLMChat
+from chat import LLMChat
 from database import (
     count_app_configs,
     get_all_configs,
@@ -323,6 +323,7 @@ def chat():
         classes_info = [
             {"name": v["name"], "trackable": v["trackable"]} for v in raw.values()
         ]
+        log.debug(f"classes_info: {classes_info}")
 
     try:
         answer = llm_chat.chat(

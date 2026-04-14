@@ -224,4 +224,10 @@ kill-ports: ## Kill processes using required ports
 		fuser -k 8082/tcp 2>/dev/null || true; \
 	fi
 	@echo "   ✓ Label Studio 8082 killed"
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		lsof -ti :6006 | xargs kill -9 2>/dev/null || true; \
+	else \
+		fuser -k 6006/tcp 2>/dev/null || true; \
+	fi
+	@echo "   ✓ Phoenix 6006 killed"
 	@echo "All ports cleared."
