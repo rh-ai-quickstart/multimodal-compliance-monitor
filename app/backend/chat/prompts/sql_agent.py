@@ -34,8 +34,6 @@ def build_sql_agent_prompt(
 
     if metrics:
         checklist = "\n".join(f"  {i + 1}. {m}" for i, m in enumerate(metrics))
-        parts.append(
-            f"\nMetrics to fetch (query each one):\n{checklist}\n\n"
-        )
+        parts.append(f"\nMetrics to fetch (query each one):\n{checklist}\n\n")
 
     return "".join(parts)
