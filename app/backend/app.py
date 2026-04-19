@@ -1,9 +1,10 @@
 from flask import Flask, Response, request, jsonify, Blueprint
 from flask_cors import CORS
-import cv2
 import json
 import os
-import time
+
+# import cv2
+# import time
 from datetime import datetime
 
 from tracing import init_tracing
@@ -13,7 +14,8 @@ from minio_client import (
     get_object_stream,
     object_exists,
 )
-from multimodel import MultiModalAIDemo
+
+# from multimodel import MultiModalAIDemo
 from chat import LLMChat
 from database import (
     count_app_configs,
@@ -27,13 +29,13 @@ from database import (
 from seed_demo_configs import insert_demo_configs
 from thumbnail_utils import generate_thumbnail_for_video_source, is_s3_video_path
 from logger import get_logger
+from video_processing.video_handler import VideoHandler
 
 log = get_logger(__name__)
 
 init_tracing()
 
 # Minimum detection confidence to draw a box on the MJPEG video feed.
-VIDEO_FEED_DRAW_MIN_CONF = 0.5
 
 app = Flask(__name__)
 api = Blueprint("api", __name__, url_prefix="/api")
@@ -50,11 +52,12 @@ CORS(app, resources={r"/*": {"origins": cors_allowed_origins}})
 
 
 # Video source is selected dynamically by the user (MP4 or RTSP from config).
-demo = MultiModalAIDemo()
-demo.setup_components()
+# demo = MultiModalAIDemo()
+# demo.setup_components()
+video_handler = VideoHandler()
 if count_app_configs() == 0:
     insert_demo_configs()
-log.info("MultiModalAIDemo initialized (video source selected from UI)")
+log.info("VideoHandler initialized (video source selected from UI)")
 
 llm_chat = LLMChat()
 
@@ -62,183 +65,90 @@ latest_description = "Initializing..."
 latest_summary = "Processing video..."
 
 
-def generate_response_frames(client_remote=None, feed_config_param=None):
-    """Generate MJPEG video stream for the /api/video_feed endpoint.
+# def generate_response_frames(client_remote=None, feed_config_param=None):
+#     global latest_description, latest_summary
+#     none_count = 0
+#     last_none_log = 0.0
+#     frame_count = 0
+#     # last_sent_key = (
+#     #     None  # (frame_epoch, frame_id) — epoch distinguishes source switches
+#     # )
+#     last_jpeg_wall_s = 0.0
+#     try:
+#         while True:
+#             frame, detections, frame_id, frame_epoch = demo.get_frame_for_display(
+#                 resize_to=(1920, 1080)
+#             )
+#             if frame is None:
+#                 none_count += 1
+#                 now = time.time()
+#                 if now - last_none_log >= 5.0:
+#                     log.warning(
+#                         "Video feed: no frame to display (%d times in ~5s, %d JPEGs sent)",
+#                         none_count,
+#                         frame_count,
+#                     )
+#                     last_none_log = now
+#                     none_count = 0
+#                 time.sleep(0.02)
+#                 continue
 
-    This generator runs in a loop, fetching the latest frame and detections from
-    the demo (which are produced by a separate inference process). It draws
-    bounding boxes and labels on each frame, encodes as JPEG, and yields
-    multipart MJPEG chunks for the browser to display.
+#             # dup_key = (
+#             #     (frame_epoch, frame_id)
+#             #     if frame_id is not None and frame_epoch >= 0
+#             #     else None
+#             # )
+#             # now_wall = time.time()
+#             # mjpeg_keepalive = (
+#             #     dup_key is not None
+#             #     and dup_key == last_sent_key
+#             #     and last_jpeg_wall_s > 0
+#             #     and (now_wall - last_jpeg_wall_s) >= 0.35
+#             # )
+#             # if dup_key is not None and dup_key == last_sent_key and not mjpeg_keepalive:
+#             #     time.sleep(0.001)  # Avoid tight loop when waiting for new frame
+#             #     continue
 
-    Flow:
-        - get_frame_for_display() returns the latest frame + detections (never blocks on inference)
-        - Draws boxes (cyan=person, green=compliant PPE, red=non-compliant)
-        - Encodes frame as JPEG and yields multipart chunk (--frame + Content-Type + Content-Length + bytes)
+#             try:
+#                 annotated_frame = frame.copy()
+#             except Exception as e:
+#                 log.exception("Video feed: frame.copy() failed: %s", e)
+#                 continue
+#             draw_detections(annotated_frame, detections)
 
-    The display path is decoupled from inference: frames come from a reader thread,
-    detections from an inference process. If no frame is available, the loop
-    continues without yielding. Duplicate frames (same buffer epoch + frame_id) are skipped
-    so reader read_count resets on source switch do not stall the stream; periodic resend
-    keeps MJPEG alive if the reader temporarily stalls on the same id.
-    """
-    global latest_description, latest_summary
-    none_count = 0
-    last_none_log = 0.0
-    frame_count = 0
-    last_sent_key = (
-        None  # (frame_epoch, frame_id) — epoch distinguishes source switches
-    )
-    last_jpeg_wall_s = 0.0
-    try:
-        while True:
-            frame, detections, frame_id, frame_epoch = demo.get_frame_for_display(
-                resize_to=(1920, 1080)
-            )
-            if frame is None:
-                none_count += 1
-                now = time.time()
-                if now - last_none_log >= 5.0:
-                    log.warning(
-                        "Video feed: no frame to display (%d times in ~5s, %d JPEGs sent)",
-                        none_count,
-                        frame_count,
-                    )
-                    last_none_log = now
-                    none_count = 0
-                time.sleep(0.02)
-                continue
+#             # Read from shared state (updated by inference thread)
+#             with demo._display_lock:
+#                 if demo._display_description:
+#                     latest_description = demo._display_description
+#                 latest_summary = (
+#                     demo._display_summary or demo.latest_summary or latest_summary
+#                 )
 
-            dup_key = (
-                (frame_epoch, frame_id)
-                if frame_id is not None and frame_epoch >= 0
-                else None
-            )
-            now_wall = time.time()
-            mjpeg_keepalive = (
-                dup_key is not None
-                and dup_key == last_sent_key
-                and last_jpeg_wall_s > 0
-                and (now_wall - last_jpeg_wall_s) >= 0.35
-            )
-            if dup_key is not None and dup_key == last_sent_key and not mjpeg_keepalive:
-                time.sleep(0.001)  # Avoid tight loop when waiting for new frame
-                continue
-
-            try:
-                annotated_frame = frame.copy()
-            except Exception as e:
-                log.exception("Video feed: frame.copy() failed: %s", e)
-                continue
-            h_frame, w_frame = annotated_frame.shape[:2]
-            # Draw bounding boxes and labels for each detection (Person, PPE items)
-            line_type = cv2.LINE_AA
-            for detection in detections:
-                x1, y1, x2, y2 = detection["bbox"]
-                x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-                x1 = max(0, min(x1, w_frame - 1))
-                y1 = max(0, min(y1, h_frame - 1))
-                x2 = max(0, min(x2, w_frame - 1))
-                y2 = max(0, min(y2, h_frame - 1))
-                if x1 >= x2 or y1 >= y2:
-                    continue
-                conf = detection["confidence"]
-                currentClass = detection["class_name"]
-                if conf > VIDEO_FEED_DRAW_MIN_CONF:
-                    if detection.get("track_id") is not None:
-                        color = (0, 255, 255)  # Cyan for tracked targets
-                    elif currentClass in ["NO-Hardhat", "NO-Safety Vest", "NO-Mask"]:
-                        color = (0, 0, 255)  # Red for non-compliance
-                    elif currentClass in ["Hardhat", "Safety Vest", "Mask"]:
-                        color = (0, 255, 0)  # Green for compliance
-                    else:
-                        color = (255, 255, 0)  # Yellow for other objects
-                    cv2.rectangle(
-                        annotated_frame,
-                        (x1, y1),
-                        (x2, y2),
-                        color,
-                        2,
-                        lineType=line_type,
-                    )
-                    label = f"{currentClass} {conf:.2f}"
-                    if detection.get("track_id") is not None:
-                        label = f"{currentClass} #{detection['track_id']} {conf:.2f}"
-                    text_size = cv2.getTextSize(
-                        label, cv2.FONT_HERSHEY_SIMPLEX, 0.9, 2
-                    )[0]
-                    label_y1 = max(0, y1 - text_size[1] - 10)
-                    label_y2 = y1
-                    label_x2 = min(w_frame, x1 + text_size[0])
-                    if label_x2 > x1 and label_y2 > label_y1:
-                        cv2.rectangle(
-                            annotated_frame,
-                            (x1, label_y1),
-                            (label_x2, label_y2),
-                            color,
-                            -1,
-                            lineType=line_type,
-                        )
-                    text_y = max(label_y1 + text_size[1] - 2, y1 - 5)
-                    cv2.putText(
-                        annotated_frame,
-                        label,
-                        (x1, text_y),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.9,
-                        (0, 0, 0),
-                        2,
-                        lineType=line_type,
-                    )
-
-            # Read from shared state (updated by inference thread)
-            with demo._display_lock:
-                if demo._display_description:
-                    latest_description = demo._display_description
-                latest_summary = (
-                    demo._display_summary or demo.latest_summary or latest_summary
-                )
-
-            ret, buffer = cv2.imencode(
-                ".jpg", annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 95]
-            )
-            if not ret:
-                log.warning(
-                    "Video feed: cv2.imencode failed shape=%s",
-                    getattr(annotated_frame, "shape", None),
-                )
-                continue
-            frame_bytes = buffer.tobytes()
-            frame_count += 1
-            last_sent_key = dup_key
-            last_jpeg_wall_s = time.time()
-            try:
-                # Content-Length helps Chrome parse each part correctly (avoids distortion from boundary misparsing)
-                header = (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n"
-                    b"Content-Length: " + str(len(frame_bytes)).encode() + b"\r\n\r\n"
-                )
-                yield header + frame_bytes + b"\r\n"
-            except (BrokenPipeError, ConnectionResetError, OSError) as e:
-                log.warning(
-                    "Video feed: client disconnected during yield: %s (frames_sent=%s)",
-                    e,
-                    frame_count,
-                )
-                break
-    except Exception as e:
-        log.exception("Video feed: exception in stream loop: %s", e)
+#             chunk = encode_mjpeg_chunk(annotated_frame)
+#             if chunk is None:
+#                 continue
+#             frame_count += 1
+#             # last_sent_key = dup_key
+#             # last_jpeg_wall_s = time.time()
+#             try:
+#                 yield chunk
+#             except (BrokenPipeError, ConnectionResetError, OSError) as e:
+#                 log.warning(
+#                     "Video feed: client disconnected during yield: %s (frames_sent=%s)",
+#                     e,
+#                     frame_count,
+#                 )
+#                 break
+#     except Exception as e:
+#         log.exception("Video feed: exception in stream loop: %s", e)
 
 
 @api.route("/video_feed")
 def video_feed():
     """Video streaming route."""
-    feed_cfg = request.args.get("config")
+    # feed_cfg = request.args.get("config")
     response = Response(
-        generate_response_frames(
-            request.remote_addr,
-            feed_config_param=feed_cfg,
-        ),
+        video_handler.frame_generator(),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
     # Disable proxy buffering to reduce periodic pauses (OpenShift/HAProxy)
@@ -255,30 +165,35 @@ def api_root():
 
 @api.route("/latest_info")
 def latest_info():
-    """Return the latest description and summary. Reads from shared state (no inference trigger)."""
+    """Return the latest description and summary."""
     global latest_description, latest_summary
-    with demo._display_lock:
-        if demo._display_description:
-            latest_description = demo._display_description
-        latest_summary = demo._display_summary or demo.latest_summary or latest_summary
-        results_received = demo._results_received_count > 0
-        _cfg = demo._active_config_id
-    process_ready = (
-        demo._inference_ready_event is not None and demo._inference_ready_event.is_set()
-    )
-    # Clear the "Loading model" overlay once inference has bound the pipeline OR produced
-    # a result. Relying only on the first result can leave the UI blank if OVMS is slow or
-    # the first frame is still in flight after INIT/RELOAD.
-    ui_ready = results_received or process_ready
+    # Old demo-based reads (kept for reference):
+    # with demo._display_lock:
+    #     if demo._display_description:
+    #         latest_description = demo._display_description
+    #     latest_summary = demo._display_summary or demo.latest_summary or latest_summary
+    #     results_received = demo._results_received_count > 0
+    #     _cfg = demo._active_config_id
+    # process_ready = (
+    #     demo._inference_ready_event is not None and demo._inference_ready_event.is_set()
+    # )
+    # ui_ready = results_received or process_ready
+    # _video = (
+    #     (demo.video_source or "")[:200] if getattr(demo, "video_source", None) else ""
+    # )
+
+    desc = video_handler.get_latested_description() or latest_description
+    summary = video_handler.get_latest_summary() or latest_summary
+    _cfg = video_handler._active_config_id
     _video = (
-        (demo.video_source or "")[:200] if getattr(demo, "video_source", None) else ""
+        (video_handler.video_source or "")[:200] if video_handler.video_source else ""
     )
+
     return jsonify(
         {
-            "description": latest_description,
-            "summary": latest_summary,
-            "inference_ready": ui_ready,
-            "inference_process_ready": process_ready,
+            "description": desc,
+            "summary": summary,
+            "inference_ready": True,
             "active_config_id": _cfg,
             "video_source": _video,
         }
@@ -308,8 +223,9 @@ def chat():
     if user_description:
         desc = user_description
     else:
-        with demo._display_lock:
-            desc = demo._display_description or latest_description
+        # with demo._display_lock:
+        #     desc = demo._display_description or latest_description
+        desc = video_handler.get_latested_description() or latest_description
     context = desc.replace("Detected: ", "", 1)
 
     app_config_id = data.get("app_config_id")
@@ -444,7 +360,8 @@ def config_delete(config_id):
         cfg = get_config_by_id(config_id)
         if not cfg:
             return jsonify({"error": "Config not found"}), 404
-        demo.stop_streaming_if_active_config(config_id)
+        # demo.stop_streaming_if_active_config(config_id)
+        video_handler.stop_streaming_if_active_config(config_id)
         deleted = delete_config(config_id)
         if not deleted:
             return jsonify({"error": "Config not found"}), 404
@@ -472,12 +389,14 @@ def active_config_set():
     if not video_source:
         return jsonify({"error": "Config has no video source"}), 400
     try:
-        demo.start_streaming(video_source, config_id=config_id)
+        # demo.start_streaming(video_source, config_id=config_id)
+        video_handler.switch_video_source(video_source, config_id)
         return jsonify(
             {
                 "message": "Active config set",
                 "video_source": video_source,
-                "active_config_id": demo._active_config_id,
+                # "active_config_id": demo._active_config_id,
+                "active_config_id": video_handler._active_config_id,
             }
         )
     except Exception as e:
