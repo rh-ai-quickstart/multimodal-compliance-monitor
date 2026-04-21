@@ -82,7 +82,7 @@ def _apply_class_sigmoid(class_scores: np.ndarray) -> tuple[np.ndarray, bool]:
 
 def _predictions_matrix(raw: np.ndarray, nc: int) -> np.ndarray:
     """
-    Return float64 array of shape (num_predictions, 4 + nc) — one row per anchor.
+    Return float32 array of shape (num_predictions, 4 + nc) — one row per anchor.
 
     Ultralytics detect export is usually (1, 4+nc, N) or (1, N, 4+nc); we normalize
     to (N, 4+nc).
@@ -120,7 +120,7 @@ def _predictions_matrix(raw: np.ndarray, nc: int) -> np.ndarray:
             f"expected {feat} (4 box + {nc} classes). Check export nc vs app config classes."
         )
 
-    return data.astype(np.float64)
+    return data.astype(np.float32)
 
 
 def postprocess_image(
@@ -162,9 +162,7 @@ def postprocess_image(
     cx, cy, w, h = data[:, 0], data[:, 1], data[:, 2], data[:, 3]
     boxes = np.column_stack([cx - 0.5 * w, cy - 0.5 * h, w, h])
 
-    result_boxes = cv2.dnn.NMSBoxes(
-        boxes.tolist(), scores.tolist(), nms_score_thr, 0.45, 0.5
-    )
+    result_boxes = cv2.dnn.NMSBoxes(boxes, scores, nms_score_thr, 0.45, 0.5)
 
     detections: list[Detection] = []
     for idx in result_boxes:

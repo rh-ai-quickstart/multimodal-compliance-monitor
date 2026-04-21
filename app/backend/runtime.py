@@ -7,7 +7,7 @@ from ovmsclient import make_grpc_client
 import tritonclient.grpc as triton_grpc
 
 from logger import get_logger
-from response import Detection, postprocess_image
+from response import Detection, postprocess_image, _raw_prediction_tensor
 
 log = get_logger(__name__)
 
@@ -61,9 +61,6 @@ class Runtime:
                     ("grpc.optimization_target", "throughput"),
                 ],
             )
-            self._infer_input = triton_grpc.InferInput(
-                self.input_name, [1, 3, 640, 640], "FP32"
-            )
             self._infer_output = triton_grpc.InferRequestedOutput("output0")
             self.inference_fun = self.kserve_inference_grpc
         elif openshift_mode:
@@ -84,6 +81,7 @@ class Runtime:
         self._pad_shape: tuple[int, int] = (0, 0)
         self._padded: np.ndarray | None = None
         self._scale: float = 1.0
+        self._batch_blob: np.ndarray | None = None
 
     def preprocess_image(self, image: np.ndarray):
         """
@@ -141,11 +139,14 @@ class Runtime:
         Triton client.  Avoids HTTP serialization overhead entirely.
         """
         fp32_image = image if image.dtype == np.float32 else image.astype(np.float32)
-        self._infer_input.set_data_from_numpy(fp32_image)
+        infer_input = triton_grpc.InferInput(
+            self.input_name, list(fp32_image.shape), "FP32"
+        )
+        infer_input.set_data_from_numpy(fp32_image)
         result = self._triton_client.infer(
             model_name=self.model_name,
             model_version=self._model_version_str,
-            inputs=[self._infer_input],
+            inputs=[infer_input],
             outputs=[self._infer_output],
         )
         return result.as_numpy("output0")
@@ -169,3 +170,92 @@ class Runtime:
             f"total: {(t3 - t0) * 1000:.1f}ms"
         )
         return detections
+
+    def _preprocess_batch_into(
+        self, images: list[np.ndarray], out: np.ndarray
+    ) -> list[float]:
+        """Preprocess images directly into a pre-allocated (N, 3, 640, 640) buffer.
+
+        Fast path when all frames share the same resolution (typical for video):
+        geometry is computed once, and the shared padded buffer is reused without
+        re-zeroing unchanged regions.
+        """
+        n = len(images)
+        scales: list[float] = [0.0] * n
+
+        first_h, first_w = images[0].shape[:2]
+        uniform = all(
+            img.shape[0] == first_h and img.shape[1] == first_w for img in images
+        )
+
+        if uniform:
+            if (first_h, first_w) != self._pad_shape:
+                self._scale = max(first_h, first_w) / 640
+                new_w = int(first_w / self._scale)
+                new_h = int(first_h / self._scale)
+                self._resized_shape = (new_w, new_h)
+                self._padded = np.zeros((640, 640, 3), np.uint8)
+                self._pad_shape = (first_h, first_w)
+
+            rw, rh = self._resized_shape
+            scale = self._scale
+            padded = self._padded
+
+            for i, img in enumerate(images):
+                resized = cv2.resize(img, (rw, rh), interpolation=cv2.INTER_LINEAR)
+                padded[:rh, :rw] = resized
+                out[i, 0] = padded[:, :, 2]
+                out[i, 1] = padded[:, :, 1]
+                out[i, 2] = padded[:, :, 0]
+                scales[i] = scale
+
+            out *= 1.0 / 255.0
+        else:
+            for i, img in enumerate(images):
+                blob, scale = self.preprocess_image(img)
+                out[i] = blob[0]
+                scales[i] = scale
+
+        return scales
+
+    def run_batch(self, images: list[np.ndarray]) -> list[list[Detection]]:
+        """Run inference on a batch of images with a single gRPC call.
+
+        Pre/post-processing are per-image loops; only the inference call is
+        batched into one ``(N, 3, 640, 640)`` tensor.
+        """
+        if not images:
+            return []
+        if len(images) == 1:
+            return [self.run(images[0])]
+
+        t0 = time.perf_counter()
+        n = len(images)
+
+        if self._batch_blob is None or self._batch_blob.shape[0] < n:
+            self._batch_blob = np.empty((n, 3, 640, 640), dtype=np.float32)
+        batched_blob = self._batch_blob[:n]
+
+        scales = self._preprocess_batch_into(images, batched_blob)
+        t1 = time.perf_counter()
+
+        raw_outputs = self.inference(batched_blob)
+        t2 = time.perf_counter()
+
+        raw_tensor = _raw_prediction_tensor(raw_outputs)
+
+        results: list[list[Detection]] = []
+        for i in range(n):
+            per_image = raw_tensor[i : i + 1]
+            dets = postprocess_image(per_image, scales[i], self.CLASSES)
+            results.append(dets)
+        t3 = time.perf_counter()
+
+        log.debug(
+            f"Batch inference ({n} images) — "
+            f"preprocess: {(t1 - t0) * 1000:.1f}ms, "
+            f"inference: {(t2 - t1) * 1000:.1f}ms, "
+            f"postprocess: {(t3 - t2) * 1000:.1f}ms, "
+            f"total: {(t3 - t0) * 1000:.1f}ms"
+        )
+        return results

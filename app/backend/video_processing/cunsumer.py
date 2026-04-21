@@ -52,6 +52,7 @@ class FrameConsumer:
         self._resolved_path: str | None = video_source
         self._temp_path: str | None = None
         self._frame_id = 0
+        self.frame_interval: float = 0.0
 
         self._source_ready = threading.Event()
         if video_source is not None:
@@ -103,6 +104,11 @@ class FrameConsumer:
         self._cap = cv2.VideoCapture(self._resolved_path)
         if not self._cap.isOpened():
             log.error(f"FrameConsumer: failed to open source {self._video_source}")
+            return
+
+        fps = self._cap.get(cv2.CAP_PROP_FPS)
+        if fps and fps > 0:
+            self.frame_interval = 1.0 / fps
 
     def _release_capture(self) -> None:
         if self._cap is not None:

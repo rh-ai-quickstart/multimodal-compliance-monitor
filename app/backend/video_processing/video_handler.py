@@ -1,5 +1,6 @@
 import cv2
 import threading
+import time
 import atexit
 
 # from typing import Self
@@ -19,6 +20,7 @@ import queue
 from database import init_database
 from logger import get_logger
 from video_processing.cunsumer import FrameConsumer
+from video_processing.inference import InferencePool
 
 log = get_logger(__name__)
 
@@ -30,9 +32,9 @@ CONFIG_MSG_RELOAD_CONFIG = "RELOAD_CONFIG"
 class VideoHandler:
     """Core video analysis pipeline for detection, summaries, and chat context.
 
-    Inference runs in a separate process to avoid GIL contention. Main process
-    reads frames, puts them in shared memory when inference is ready, and
-    consumes results for display.
+    Inference runs in a pool of worker threads (each with its own Runtime) so
+    multiple frames can be processed concurrently.  The heavy-lifting ops
+    (gRPC I/O, cv2, numpy) release the GIL, giving true parallelism.
     """
 
     def __init__(self, video_source=None):
@@ -45,9 +47,11 @@ class VideoHandler:
         self.latest_description = ""
         self._display_lock = threading.Lock()
 
-        self._frame_queue: queue.Queue = queue.Queue(maxsize=30)
+        self._frame_queue: queue.Queue = queue.Queue(maxsize=150)
+        self._inference_out_queue: queue.Queue = queue.Queue(maxsize=350)
         self._stop_event = threading.Event()
         self._consumer: FrameConsumer | None = None
+        self._inference_pool: InferencePool | None = None
         self._active_config_id: int | None = None
 
         self.init_setup()
@@ -60,14 +64,38 @@ class VideoHandler:
         self._consumer.start()
         log.info("FrameConsumer thread started (idle)")
 
+        self._inference_pool = InferencePool(
+            self._frame_queue, self._inference_out_queue, self._stop_event
+        )
+        self._inference_pool.start()
+        log.info("InferencePool started (idle)")
+
         # TODO: Start Deepsort process
-        # TODO: Start inference / results consumer thread
+
+        self._queue_monitor = threading.Thread(
+            target=self._log_queue_sizes,
+            name="queue-monitor",
+            daemon=True,
+        )
+        self._queue_monitor.start()
 
         atexit.register(self._shutdown)
 
+    def _log_queue_sizes(self) -> None:
+        while not self._stop_event.wait(timeout=2.0):
+            log.info(
+                "queue sizes: frame_queue=%d/%d inference_out_queue=%d/%d",
+                self._frame_queue.qsize(),
+                self._frame_queue.maxsize,
+                self._inference_out_queue.qsize(),
+                self._inference_out_queue.maxsize,
+            )
+
     def _shutdown(self):
-        log.info("Shutting down MultiModalAIDemo2")
+        log.info("Shutting down VideoHandler")
         self._stop_event.set()
+        if self._inference_pool is not None:
+            self._inference_pool.stop()
         if self._consumer is not None:
             self._consumer.stop()
 
@@ -75,6 +103,7 @@ class VideoHandler:
         self._stop_event.clear()
         self.video_source = video_source
         self._active_config_id = config_id
+        self._inference_pool.configure(config_id)
         self._consumer.set_source(video_source)
         self._streaming_started = True
         log.info(f"Streaming started for source={video_source} config_id={config_id}")
@@ -83,11 +112,12 @@ class VideoHandler:
         if self._consumer is not None:
             self._consumer.make_idle()
 
-        while not self._frame_queue.empty():
-            try:
-                self._frame_queue.get_nowait()
-            except queue.Empty:
-                break
+        for q in (self._frame_queue, self._inference_out_queue):
+            while not q.empty():
+                try:
+                    q.get_nowait()
+                except queue.Empty:
+                    break
 
         self._active_config_id = None
         self._streaming_started = False
@@ -104,15 +134,14 @@ class VideoHandler:
 
         self.start_streaming(new_video_source, new_config_id)
 
-    def get_next_frame(self):
-        """Takes frame from the frame buffer which is fed by the consumer thread."""
-        try:
-            return self._frame_queue.get(timeout=1.0)
-        except queue.Empty:
-            return None, -1
-
-    def put_frame_for_inference(self, frame):
-        "put the frame inside the buffer for bouning box detection the inference thread takes from this buffer"
+    def get_frame_and_detection_from_inference(self):
+        """Block until an inference result is ready and return it."""
+        while not self._stop_event.is_set():
+            try:
+                return self._inference_out_queue.get(timeout=0.001)
+            except queue.Empty:
+                continue
+        return None
 
     def put_detections_for_tracks(self, detections):
         "given the detection put the detections in the buffer for process deepsort to return tracks"
@@ -183,6 +212,7 @@ class VideoHandler:
                 2,
                 lineType=line_type,
             )
+        return frame
 
     def encode_mjpeg_chunk(self, frame, quality=95):
         """Encode *frame* as JPEG and wrap it in a multipart MJPEG chunk.
@@ -204,32 +234,45 @@ class VideoHandler:
         return header + frame_bytes + b"\r\n"
 
     def frame_generator(self):
+        time.sleep(1)
+        frame_interval = self._consumer.frame_interval
+        last_yield_time = time.perf_counter()
         try:
             while True:
-                frame, frame_id = self.get_next_frame()
-                if frame is None:
+                result = self.get_frame_and_detection_from_inference()
+                if result is None:
                     continue
 
-                # detections = self.put_frame_for_inference(frame)
+                # TODO: tracks = self.put_detections_for_tracks(detections)
 
-                # tracks = self.put_detections_for_tracks(detections)
-
-                # annotated_frame = self.draw_detections(frame, tracks, detections)
-
-                # # Update detections and safty treand (which is summary)
+                # TODO: Update description and safety trend
                 # with self._display_lock:
-                #     self.latest_description = TODO
-                #     self.latest_summary = TODO
+                #     self.latest_description = ...
+                #     self.latest_summary = ...
 
+                frame = self.draw_detections(result.frame, result.detections)
                 chunk = self.encode_mjpeg_chunk(frame)
                 if chunk is None:
                     continue
 
+                elapsed = time.perf_counter() - last_yield_time
+                sleep_time = frame_interval - elapsed
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                log.info(
+                    f"Time elapsed: {elapsed} seconds, Sleeping for {sleep_time} seconds"
+                )
+                last_yield_time = time.perf_counter()
+
                 try:
+                    yield_start = time.perf_counter()
                     yield chunk
+                    yield_end = time.perf_counter()
+                    log.info(f"Yield took {(yield_end - yield_start) * 1000:.2f} ms")
                 except (BrokenPipeError, ConnectionResetError, OSError) as e:
                     log.warning(f"Video feed: client disconnected during yield: {e}")
                     break
+
         except Exception as e:
             log.exception(f"Video feed: exception in stream loop: {e}")
 
