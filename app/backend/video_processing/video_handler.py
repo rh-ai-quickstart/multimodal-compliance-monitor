@@ -1,32 +1,18 @@
-import cv2
+import atexit
+import queue
 import threading
 import time
-import atexit
-
-# from typing import Self
-# import json
-# import numpy as np
-# import os
-# import tempfile
-# import time
-# from datetime import datetime
-# from multiprocessing import Process, Queue, Event
-# from multiprocessing.shared_memory import SharedMemory
 from collections import defaultdict
-import queue
 
-# from response import process_detections
-# from runtime import Runtime
-from database import init_database
+import cv2
+
+from database import init_database, get_detection_classes_pipeline_maps
 from logger import get_logger
 from video_processing.cunsumer import FrameConsumer
 from video_processing.inference import InferencePool
+from video_processing.tracking import TrackerProcess
 
 log = get_logger(__name__)
-
-# config_queue message kinds (multiprocessing — must be picklable dicts)
-CONFIG_MSG_INIT_SHM = "INIT_SHM"
-CONFIG_MSG_RELOAD_CONFIG = "RELOAD_CONFIG"
 
 
 class VideoHandler:
@@ -52,7 +38,9 @@ class VideoHandler:
         self._stop_event = threading.Event()
         self._consumer: FrameConsumer | None = None
         self._inference_pool: InferencePool | None = None
+        self._tracker: TrackerProcess | None = None
         self._active_config_id: int | None = None
+        self._class_names_in_order: list[str] = []
 
         self.init_setup()
 
@@ -70,7 +58,9 @@ class VideoHandler:
         self._inference_pool.start()
         log.info("InferencePool started (idle)")
 
-        # TODO: Start Deepsort process
+        self._tracker = TrackerProcess()
+        self._tracker.start()
+        log.info("TrackerProcess started (idle)")
 
         self._queue_monitor = threading.Thread(
             target=self._log_queue_sizes,
@@ -94,6 +84,8 @@ class VideoHandler:
     def _shutdown(self):
         log.info("Shutting down VideoHandler")
         self._stop_event.set()
+        if self._tracker is not None:
+            self._tracker.stop()
         if self._inference_pool is not None:
             self._inference_pool.stop()
         if self._consumer is not None:
@@ -103,7 +95,15 @@ class VideoHandler:
         self._stop_event.clear()
         self.video_source = video_source
         self._active_config_id = config_id
+        classes, include_in_counts, trackable, name_to_id = (
+            get_detection_classes_pipeline_maps(config_id)
+        )
+        self._class_names_in_order = [classes[i] for i in sorted(classes)]
         self._inference_pool.configure(config_id)
+        self._tracker.configure(
+            trackable_by_class_id=trackable,
+            detection_class_name_to_id=name_to_id,
+        )
         self._consumer.set_source(video_source)
         self._streaming_started = True
         log.info(f"Streaming started for source={video_source} config_id={config_id}")
@@ -118,6 +118,9 @@ class VideoHandler:
                     q.get_nowait()
                 except queue.Empty:
                     break
+
+        if self._tracker is not None:
+            self._tracker.reset()
 
         self._active_config_id = None
         self._streaming_started = False
@@ -143,8 +146,17 @@ class VideoHandler:
                 continue
         return None
 
-    def put_detections_for_tracks(self, detections):
-        "given the detection put the detections in the buffer for process deepsort to return tracks"
+    def _format_detection_description(
+        self,
+        detections_class_count: dict[str, int],
+        class_names_in_order: list[str],
+    ) -> str:
+        """Build a short, human-readable description from counts; order follows config/model indices."""
+        description = "Detected: "
+        for item in class_names_in_order:
+            if detections_class_count.get(item, 0) > 0:
+                description += f"{item}: {detections_class_count[item]}, "
+        return description.rstrip(", ")
 
     def draw_detections(self, frame, detections):
         """Draw bounding boxes and labels for each detection onto *frame* (mutated in-place).
@@ -243,12 +255,13 @@ class VideoHandler:
                 if result is None:
                     continue
 
-                # TODO: tracks = self.put_detections_for_tracks(detections)
+                self._tracker.submit(
+                    result.tracker_input_dets, result.frame, result.detections
+                )
 
-                # TODO: Update description and safety trend
-                # with self._display_lock:
-                #     self.latest_description = ...
-                #     self.latest_summary = ...
+                self.latest_description = self._format_detection_description(
+                    result.counts, self._class_names_in_order
+                )
 
                 frame = self.draw_detections(result.frame, result.detections)
                 chunk = self.encode_mjpeg_chunk(frame)
