@@ -21,6 +21,84 @@ echo "Buckets ready"
 RUNTIME_TYPE="${RUNTIME_TYPE}"
 echo "Runtime type: ${RUNTIME_TYPE}"
 
+# Regenerate OVMS config.json from env vars when any OVMS_CONFIG_* is set.
+# Writes to /tmp (always writable) since the baked-in file under /upload is
+# owned by root and read-only under OpenShift's random-UID SCC.
+OVMS_CONFIG_FILE="/upload/models/ovms/config.json"
+
+regen_ovms_config() {
+	MOUNT_BASE="${OVMS_CLUSTER_MOUNT_BASE:-/mnt/models}"
+	NIREQ="${OVMS_CONFIG_NIREQ:-2}"
+	PLUGIN_CFG="${OVMS_CONFIG_PLUGIN_CONFIG}"
+	if [ -z "$PLUGIN_CFG" ]; then
+		PLUGIN_CFG='{"PERFORMANCE_HINT": "THROUGHPUT"}'
+	fi
+	SHAPE="${OVMS_CONFIG_SHAPE}"
+	OUT="/tmp/ovms-config.json"
+
+	first=true
+	printf '{\n  "model_config_list": [\n' >"$OUT"
+	for d in /upload/models/ovms/*/; do
+		[ -d "$d" ] || continue
+		name=$(basename "$d")
+		case "$name" in *-onnx) continue ;; esac
+		[ -f "${d}1/${name}.xml" ] || continue
+
+		if [ "$first" = true ]; then first=false; else printf ',\n' >>"$OUT"; fi
+		printf '    {\n      "config": {\n' >>"$OUT"
+		printf '        "name": "%s",\n' "$name" >>"$OUT"
+		printf '        "base_path": "%s/%s",\n' "$MOUNT_BASE" "$name" >>"$OUT"
+		printf '        "nireq": %s,\n' "$NIREQ" >>"$OUT"
+		printf '        "plugin_config": %s' "$PLUGIN_CFG" >>"$OUT"
+		if [ -n "$SHAPE" ]; then
+			printf ',\n        "shape": %s' "$SHAPE" >>"$OUT"
+		fi
+		printf '\n      }\n    }' >>"$OUT"
+	done
+	printf '\n  ]\n}\n' >>"$OUT"
+	OVMS_CONFIG_FILE="$OUT"
+	echo "Regenerated config.json (nireq=$NIREQ)"
+}
+
+# Regenerate OVMS config.json from env vars when any OVMS_CONFIG_* is set.
+# Writes to /tmp (always writable) since the baked-in file under /upload is
+# owned by root and read-only under OpenShift's random-UID SCC.
+OVMS_CONFIG_FILE="/upload/models/ovms/config.json"
+
+regen_ovms_config() {
+	MOUNT_BASE="${OVMS_CLUSTER_MOUNT_BASE:-/mnt/models}"
+	NIREQ="${OVMS_CONFIG_NIREQ:-2}"
+	PLUGIN_CFG="${OVMS_CONFIG_PLUGIN_CONFIG}"
+	if [ -z "$PLUGIN_CFG" ]; then
+		PLUGIN_CFG='{"PERFORMANCE_HINT": "THROUGHPUT"}'
+	fi
+	SHAPE="${OVMS_CONFIG_SHAPE}"
+	OUT="/tmp/ovms-config.json"
+
+	first=true
+	printf '{\n  "model_config_list": [\n' >"$OUT"
+	for d in /upload/models/ovms/*/; do
+		[ -d "$d" ] || continue
+		name=$(basename "$d")
+		case "$name" in *-onnx) continue ;; esac
+		[ -f "${d}1/${name}.xml" ] || continue
+
+		if [ "$first" = true ]; then first=false; else printf ',\n' >>"$OUT"; fi
+		printf '    {\n      "config": {\n' >>"$OUT"
+		printf '        "name": "%s",\n' "$name" >>"$OUT"
+		printf '        "base_path": "%s/%s",\n' "$MOUNT_BASE" "$name" >>"$OUT"
+		printf '        "nireq": %s,\n' "$NIREQ" >>"$OUT"
+		printf '        "plugin_config": %s' "$PLUGIN_CFG" >>"$OUT"
+		if [ -n "$SHAPE" ]; then
+			printf ',\n        "shape": %s' "$SHAPE" >>"$OUT"
+		fi
+		printf '\n      }\n    }' >>"$OUT"
+	done
+	printf '\n  ]\n}\n' >>"$OUT"
+	OVMS_CONFIG_FILE="$OUT"
+	echo "Regenerated config.json (nireq=$NIREQ)"
+}
+
 # OVMS assets must reach MinIO whenever the data image includes them. The init Job
 # uses modelServing.runtimeType (often kserve) while an OVMS InferenceService still
 # expects models/ovms/config.json under the KServe storage prefix—so this is not
@@ -41,9 +119,12 @@ if [ -d /upload/models/ovms ]; then
 			echo "OpenVINO ovms/${base} already present, skipping"
 		fi
 	done
-	if [ -f /upload/models/ovms/config.json ]; then
+	if [ -n "${OVMS_CONFIG_NIREQ:-}" ] || [ -n "${OVMS_CONFIG_PLUGIN_CONFIG:-}" ] || [ -n "${OVMS_CONFIG_SHAPE:-}" ]; then
+		regen_ovms_config
+	fi
+	if [ -f "$OVMS_CONFIG_FILE" ]; then
 		echo "Uploading OpenVINO config.json (multi-model OVMS)..."
-		mc cp /upload/models/ovms/config.json myminio/models/ovms/config.json
+		mc cp "$OVMS_CONFIG_FILE" myminio/models/ovms/config.json
 	fi
 fi
 

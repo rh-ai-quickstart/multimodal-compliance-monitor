@@ -164,15 +164,12 @@ services:
     environment:
       CORS_ORIGINS: "http://localhost:3000,http://0.0.0.0:3000,http://127.0.0.1:3000"
       POSTGRES_MCP_URL: "http://postgres-mcp:8000/sse"
-      # MinIO configuration (for model; video source selected from UI)
+      # MinIO configuration
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_SECURE: "false"
-      MINIO_MODEL_BUCKET: models
-      MINIO_MODEL_KEY: ppe.pt
       MINIO_VIDEO_BUCKET: data
-      MINIO_VIDEO_KEY: combined-video-no-gap-rooftop.mp4
       # model_name comes from app_config; tensor input/version overrides optional
       MODEL_INPUT_NAME: "x"
       MODEL_VERSION: "1"

@@ -386,8 +386,7 @@ def build_serving_runtime_spec(cfg):
                     "args": _build_ovms_args(cfg),
                     "ports": [
                         {
-                            "name": "http",
-                            "containerPort": cfg["rest_port"],
+                            "containerPort": cfg["grpc_port"],
                             "protocol": "TCP",
                         },
                         {

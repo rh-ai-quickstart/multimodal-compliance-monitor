@@ -29,4 +29,14 @@ spec:
               value: {{ .Values.minio.secret.password | quote }}
             - name: RUNTIME_TYPE
               value: {{ .Values.modelServing.runtimeType | quote }}
+            {{- if eq .Values.modelServing.runtimeType "openvino" }}
+            - name: OVMS_CONFIG_NIREQ
+              value: {{ .Values.modelServing.openvino.config.nireq | default "2" | quote }}
+            - name: OVMS_CONFIG_PLUGIN_CONFIG
+              value: {{ .Values.modelServing.openvino.config.pluginConfig | default "{}" | quote }}
+            {{- with .Values.modelServing.openvino.config.shape }}
+            - name: OVMS_CONFIG_SHAPE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
 {{- end }}
