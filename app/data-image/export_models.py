@@ -69,6 +69,9 @@ def _ovms_per_model_extras() -> dict:
     batch = os.environ.get("OVMS_CONFIG_BATCH_SIZE", "").strip()
     if batch:
         extras["batch_size"] = batch
+    shape = os.environ.get("OVMS_CONFIG_SHAPE", "").strip()
+    if shape:
+        extras["shape"] = json.loads(shape) if shape.startswith("{") else shape
     return extras
 
 
@@ -127,7 +130,14 @@ def main() -> None:
         tmp_pt = f"/tmp/{stem}.pt"
         shutil.copy(pt_path, tmp_pt)
         subprocess.run(
-            ["yolo", "export", f"model={tmp_pt}", "format=openvino", "task=detect"],
+            [
+                "yolo",
+                "export",
+                f"model={tmp_pt}",
+                "format=openvino",
+                "task=detect",
+                "dynamic=True",
+            ],
             check=True,
         )
         os.makedirs(d_ov, exist_ok=True)
@@ -140,7 +150,14 @@ def main() -> None:
             shutil.copy(found[0], os.path.join(d_ov, dest_name))
 
         subprocess.run(
-            ["yolo", "export", f"model={tmp_pt}", "format=onnx", "task=detect"],
+            [
+                "yolo",
+                "export",
+                f"model={tmp_pt}",
+                "format=onnx",
+                "task=detect",
+                "dynamic=True",
+            ],
             check=True,
         )
         # Triton layout: triton/<stem>/1/model.onnx (IR lives under ovms/<stem>/1/).

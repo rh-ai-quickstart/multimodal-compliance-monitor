@@ -26,7 +26,7 @@ for pt in "${pts[@]}"; do
 	echo "exporting: $stem"
 	mkdir -p "$target_dir"
 	cp "$pt" "/tmp/${stem}.pt"
-	yolo export "model=/tmp/${stem}.pt" format=openvino task=detect
+	yolo export "model=/tmp/${stem}.pt" format=openvino task=detect dynamic=True
 	cp "/tmp/${stem}_openvino_model/"*.xml "$target_xml"
 	cp "/tmp/${stem}_openvino_model/"*.bin "${target_dir}/${stem}.bin"
 done

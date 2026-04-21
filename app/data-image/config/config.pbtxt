@@ -6,14 +6,14 @@ input [
   {
     name: "images"
     data_type: TYPE_FP32
-    dims: [1, 3, 640, 640]
+    dims: [-1, 3, 640, 640]
   }
 ]
 output [
   {
     name: "output0"
     data_type: TYPE_FP32
-    dims: [1, 14, 8400]
+    dims: [-1, 14, 8400]
   }
 ]
 
