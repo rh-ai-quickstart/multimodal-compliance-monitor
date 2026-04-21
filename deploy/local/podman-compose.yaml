@@ -6,7 +6,7 @@ networks:
 
 services:
   minio:
-    image: docker.io/minio/minio:latest
+    image: docker.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     container_name: minio
     ports:
       - "9000:9000"
@@ -26,10 +26,11 @@ services:
       start_period: 5s
     volumes:
       - minio_data:/data
+    pull_policy: missing
 
   # PostgreSQL database for tracking data persistence
   postgresql:
-    image: docker.io/library/postgres:16-alpine
+    image: docker.io/library/postgres@sha256:93d55776e04376e19adb2733e3ccebb4392ee7dd86d8ff238503b30fe719c84f
     container_name: postgresql
     ports:
       - "5432:5432"
@@ -47,10 +48,11 @@ services:
       start_period: 5s
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    pull_policy: missing
 
   # Postgres MCP server (read-only access for the LLM agent)
   postgres-mcp:
-    image: docker.io/crystaldba/postgres-mcp:latest
+    image: docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b
     container_name: postgres-mcp
     depends_on:
       postgresql:
@@ -62,10 +64,11 @@ services:
       - "8000:8000"
     networks:
       - ppe
+    pull_policy: missing
 
   # Label Studio annotation UI (uses the same PostgreSQL and MinIO services)
   labelstudio:
-    image: docker.io/heartexlabs/label-studio:latest
+    image: docker.io/heartexlabs/label-studio@sha256:aa461572e8f9d86a1bf9520c1db620204e86160fd2f80dd7e9d40ac84a8828ea
     container_name: labelstudio
     depends_on:
       postgresql:
@@ -85,15 +88,17 @@ services:
       - labelstudio_data:/label-studio/data
     networks:
       - ppe
+    pull_policy: missing
 
   # RTSP server for video streaming (MP4 simulation or real camera proxy)
   video-stream:
-    image: docker.io/bluenviron/mediamtx:latest
+    image: docker.io/bluenviron/mediamtx@sha256:9e39256d1ba35f0063700c6f62dd32e6db4592ddd9560d78f409ec451d79b1d8
     container_name: video-stream
     ports:
       - "8554:8554"
     networks:
       - ppe
+    pull_policy: missing
 
   # FFmpeg publisher: downloads MP4 from MinIO and streams to MediaMTX
   video-stream-ffmpeg:
@@ -126,6 +131,7 @@ services:
       context: ../../app
       dockerfile: data-image/Dockerfile
     image: ppe-compliance-monitor-data:local
+    pull_policy: missing
     depends_on:
       minio:
         condition: service_healthy
@@ -143,6 +149,7 @@ services:
       dockerfile: Dockerfile
     image: ppe-compliance-monitor-backend:local
     command: ["app.py"]
+    pull_policy: missing
     depends_on:
       data-loader:
         condition: service_completed_successfully
@@ -184,6 +191,7 @@ services:
       CONFIG_BUCKET: config
       DEFAULT_OVMS_MODEL_URL: "ovms:8081"
       PHOENIX_COLLECTOR_ENDPOINT: "http://phoenix:4317"
+      # INFERENCE_WORKERS: "2"
     ports:
       - "8888:8888"
     networks:
@@ -214,9 +222,11 @@ services:
       - ppe
     profiles:
       - eval
+    pull_policy: missing
+
 
   phoenix:
-    image: docker.io/arizephoenix/phoenix:latest
+    image: docker.io/arizephoenix/phoenix@sha256:21d06ca8f3a690652389e6cd2c3f59e83bedfb16cf8881629e7df5965c7dd0e0
     container_name: phoenix
     ports:
       - "6006:6006"
@@ -227,10 +237,12 @@ services:
       - phoenix_data:/mnt/data
     networks:
       - ppe
+    pull_policy: missing
 
   init-eval-db:
-    image: docker.io/library/python:3.11-slim
+    image: docker.io/library/python@sha256:233de06753d30d120b1a3ce359d8d3be8bda78524cd8f520c99883bfe33964cf
     command: sh -c "pip install -q psycopg2-binary && python /evals/init_db.py"
+    pull_policy: missing
     working_dir: /evals
     environment:
       DB_HOST: postgresql
@@ -263,10 +275,16 @@ services:
         printf "window.__ENV__ = { API_URL: \"%s\" };\n" "$${FRONTEND_API_URL}" > /app/build/env.js && serve -s /app/build -l tcp://0.0.0.0:3000 #magic___^_^___line
     ports:
       - "3000:3000"
+    pull_policy: missing
 
   # Export each app/models/*.pt → /models/ovms/<name>/1/*.xml + ovms/config.json for OVMS
   yolo-model-prep:
-    image: docker.io/ultralytics/ultralytics:latest-cpu
+    image: docker.io/ultralytics/ultralytics@sha256:6ec3f66f0e1a8a14d6410d8e395296005ff68966179a5856df7dec70f0d5b277
+    environment:
+      OVMS_CONFIG_NIREQ: "8"
+      OVMS_CONFIG_PLUGIN_CONFIG: '{"PERFORMANCE_HINT": "THROUGHPUT", "ENABLE_CPU_PINNING": false}'
+      OVMS_CONFIG_SHAPE: '{"x":"(-1,3,640,640)"}'
+    pull_policy: missing
     volumes:
       - ../../app/models:/source:ro,z
       - model_repo:/models:z
@@ -278,10 +296,11 @@ services:
 
   # ── OpenVINO Model Server (multi-model via config.json) ──
   ovms:
-    image: openvino/model_server:latest
+    image: docker.io/openvino/model_server@sha256:471362689b24d2e1824d4d2bddaea2e1e2908259d03eab7bd39179d9b0f7422c
     depends_on:
       yolo-model-prep:
         condition: service_completed_successfully
+    pull_policy: missing
     restart: on-failure
     command:
       - --config_path
