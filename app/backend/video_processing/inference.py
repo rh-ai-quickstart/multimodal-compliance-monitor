@@ -82,6 +82,12 @@ class InferencePool:
         self._config: _PipelineConfig | None = None
         self._config_lock = threading.Lock()
 
+        self._batch_lock = threading.Lock()
+
+        self._reorder_lock = threading.Lock()
+        self._pending: dict[int, InferenceResult] = {}
+        self._next_frame_id: int = 1
+
         self._threads: list[threading.Thread] = []
 
     def start(self) -> None:
@@ -168,19 +174,31 @@ class InferencePool:
     def _handle_configure(self, config_id: int, name: str) -> None:
         with self._config_lock:
             self._build_pipeline_config(config_id)
+        with self._reorder_lock:
+            self._pending.clear()
+            self._next_frame_id = 1
 
     def _push_result(self, result: InferenceResult) -> None:
-        try:
-            self._out_queue.put_nowait(result)
-        except queue_mod.Full:
-            try:
-                self._out_queue.get_nowait()
-            except queue_mod.Empty:
-                pass
+        with self._reorder_lock:
+            self._pending[result.frame_id] = result
+            self._flush_pending()
+
+    def _flush_pending(self) -> None:
+        """Emit consecutive results from the reorder buffer to ``_out_queue``."""
+        while self._next_frame_id in self._pending:
+            result = self._pending.pop(self._next_frame_id)
             try:
                 self._out_queue.put_nowait(result)
             except queue_mod.Full:
-                pass
+                try:
+                    self._out_queue.get_nowait()
+                except queue_mod.Empty:
+                    pass
+                try:
+                    self._out_queue.put_nowait(result)
+                except queue_mod.Full:
+                    pass
+            self._next_frame_id += 1
 
     def _worker_loop(self) -> None:
         name = threading.current_thread().name
@@ -193,42 +211,50 @@ class InferencePool:
 
         try:
             while not self._stop.is_set():
-                # -- accumulate phase: collect at least min_batch frames --
                 batch: list[tuple[np.ndarray, int]] = []
 
-                while len(batch) < min_batch and not self._stop.is_set():
-                    try:
-                        item = self._in_queue.get(timeout=0.05)
-                    except queue_mod.Empty:
-                        continue
+                with self._batch_lock:
+                    # -- accumulate phase: collect at least min_batch frames --
+                    while len(batch) < min_batch and not self._stop.is_set():
+                        try:
+                            item = self._in_queue.get(timeout=0.05)
+                        except queue_mod.Empty:
+                            continue
 
-                    if isinstance(item, dict) and item.get("kind") == _MSG_CONFIGURE:
-                        self._handle_configure(item["config_id"], name)
-                        local_runtime = None
-                        local_config_version = 0
-                        batch.clear()
-                        continue
+                        if (
+                            isinstance(item, dict)
+                            and item.get("kind") == _MSG_CONFIGURE
+                        ):
+                            self._handle_configure(item["config_id"], name)
+                            local_runtime = None
+                            local_config_version = 0
+                            batch.clear()
+                            continue
 
-                    if self._config is None:
-                        continue
+                        if self._config is None:
+                            continue
 
-                    batch.append(item)
+                        batch.append(item)
+
+                    # -- drain phase: greedily grab more up to max_batch --
+                    if not self._stop.is_set() and batch:
+                        while len(batch) < max_batch:
+                            try:
+                                item = self._in_queue.get_nowait()
+                            except queue_mod.Empty:
+                                break
+
+                            if (
+                                isinstance(item, dict)
+                                and item.get("kind") == _MSG_CONFIGURE
+                            ):
+                                self._in_queue.put(item)
+                                break
+
+                            batch.append(item)
 
                 if self._stop.is_set() or not batch:
                     continue
-
-                # -- drain phase: greedily grab more up to max_batch --
-                while len(batch) < max_batch:
-                    try:
-                        item = self._in_queue.get_nowait()
-                    except queue_mod.Empty:
-                        break
-
-                    if isinstance(item, dict) and item.get("kind") == _MSG_CONFIGURE:
-                        self._in_queue.put(item)
-                        break
-
-                    batch.append(item)
 
                 # -- ensure runtime is up-to-date --
                 cfg = self._config
