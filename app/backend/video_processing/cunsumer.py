@@ -6,11 +6,42 @@ import queue as queue_mod
 import threading
 import time
 
+import tempfile
+
 import cv2
 
-from multimodel import _resolve_video_source_to_path
+from minio_client import download_file
 
 log = logging.getLogger(__name__)
+
+
+def _resolve_video_source_to_path(video_source: str) -> tuple[str, str | None]:
+    """
+    Resolve video_source to a path cv2.VideoCapture can open.
+    Returns (path_to_use, temp_path_or_none). If temp_path is set, caller must delete it.
+    S3 URIs (s3://bucket/key) are downloaded to a temp file.
+    """
+    if not video_source or not isinstance(video_source, str):
+        return video_source or "", None
+    p = video_source.strip()
+    if p.startswith("s3://"):
+        parts = p[5:].split("/", 1)
+        if len(parts) == 2:
+            bucket, key = parts[0], parts[1]
+            fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
+            os.close(fd)
+            try:
+                download_file(bucket, key, tmp_path)
+                return tmp_path, tmp_path
+            except Exception as e:
+                log.exception("Failed to download S3 video %s: %s", video_source, e)
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+    return video_source, None
+
 
 _MAX_CONSECUTIVE_FAILURES = 30
 _RECONNECT_BACKOFF_S = 2.0

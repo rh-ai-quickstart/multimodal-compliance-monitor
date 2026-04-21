@@ -257,7 +257,7 @@ class _BatchDbWriter:
             self._conn = None
 
 
-# ----- PPE association (ported from multimodel.py) -----
+# ----- PPE association -----
 
 _PPE_MAPPING = {
     "Hardhat": ("hardhat", True),

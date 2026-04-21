@@ -15,7 +15,6 @@ from minio_client import (
     object_exists,
 )
 
-# from multimodel import MultiModalAIDemo
 from chat import LLMChat
 from database import (
     count_app_configs,
@@ -50,10 +49,6 @@ else:
 
 CORS(app, resources={r"/*": {"origins": cors_allowed_origins}})
 
-
-# Video source is selected dynamically by the user (MP4 or RTSP from config).
-# demo = MultiModalAIDemo()
-# demo.setup_components()
 video_handler = VideoHandler()
 if count_app_configs() == 0:
     insert_demo_configs()
@@ -63,84 +58,6 @@ llm_chat = LLMChat()
 
 latest_description = "Initializing..."
 latest_summary = "Processing video..."
-
-
-# def generate_response_frames(client_remote=None, feed_config_param=None):
-#     global latest_description, latest_summary
-#     none_count = 0
-#     last_none_log = 0.0
-#     frame_count = 0
-#     # last_sent_key = (
-#     #     None  # (frame_epoch, frame_id) — epoch distinguishes source switches
-#     # )
-#     last_jpeg_wall_s = 0.0
-#     try:
-#         while True:
-#             frame, detections, frame_id, frame_epoch = demo.get_frame_for_display(
-#                 resize_to=(1920, 1080)
-#             )
-#             if frame is None:
-#                 none_count += 1
-#                 now = time.time()
-#                 if now - last_none_log >= 5.0:
-#                     log.warning(
-#                         "Video feed: no frame to display (%d times in ~5s, %d JPEGs sent)",
-#                         none_count,
-#                         frame_count,
-#                     )
-#                     last_none_log = now
-#                     none_count = 0
-#                 time.sleep(0.02)
-#                 continue
-
-#             # dup_key = (
-#             #     (frame_epoch, frame_id)
-#             #     if frame_id is not None and frame_epoch >= 0
-#             #     else None
-#             # )
-#             # now_wall = time.time()
-#             # mjpeg_keepalive = (
-#             #     dup_key is not None
-#             #     and dup_key == last_sent_key
-#             #     and last_jpeg_wall_s > 0
-#             #     and (now_wall - last_jpeg_wall_s) >= 0.35
-#             # )
-#             # if dup_key is not None and dup_key == last_sent_key and not mjpeg_keepalive:
-#             #     time.sleep(0.001)  # Avoid tight loop when waiting for new frame
-#             #     continue
-
-#             try:
-#                 annotated_frame = frame.copy()
-#             except Exception as e:
-#                 log.exception("Video feed: frame.copy() failed: %s", e)
-#                 continue
-#             draw_detections(annotated_frame, detections)
-
-#             # Read from shared state (updated by inference thread)
-#             with demo._display_lock:
-#                 if demo._display_description:
-#                     latest_description = demo._display_description
-#                 latest_summary = (
-#                     demo._display_summary or demo.latest_summary or latest_summary
-#                 )
-
-#             chunk = encode_mjpeg_chunk(annotated_frame)
-#             if chunk is None:
-#                 continue
-#             frame_count += 1
-#             # last_sent_key = dup_key
-#             # last_jpeg_wall_s = time.time()
-#             try:
-#                 yield chunk
-#             except (BrokenPipeError, ConnectionResetError, OSError) as e:
-#                 log.warning(
-#                     "Video feed: client disconnected during yield: %s (frames_sent=%s)",
-#                     e,
-#                     frame_count,
-#                 )
-#                 break
-#     except Exception as e:
-#         log.exception("Video feed: exception in stream loop: %s", e)
 
 
 @api.route("/video_feed")
@@ -167,21 +84,6 @@ def api_root():
 def latest_info():
     """Return the latest description and summary."""
     global latest_description, latest_summary
-    # Old demo-based reads (kept for reference):
-    # with demo._display_lock:
-    #     if demo._display_description:
-    #         latest_description = demo._display_description
-    #     latest_summary = demo._display_summary or demo.latest_summary or latest_summary
-    #     results_received = demo._results_received_count > 0
-    #     _cfg = demo._active_config_id
-    # process_ready = (
-    #     demo._inference_ready_event is not None and demo._inference_ready_event.is_set()
-    # )
-    # ui_ready = results_received or process_ready
-    # _video = (
-    #     (demo.video_source or "")[:200] if getattr(demo, "video_source", None) else ""
-    # )
-
     desc = video_handler.get_latested_description() or latest_description
     summary = video_handler.get_latest_summary() or latest_summary
     _cfg = video_handler._active_config_id
@@ -223,8 +125,6 @@ def chat():
     if user_description:
         desc = user_description
     else:
-        # with demo._display_lock:
-        #     desc = demo._display_description or latest_description
         desc = video_handler.get_latested_description() or latest_description
     context = desc.replace("Detected: ", "", 1)
 
@@ -360,7 +260,6 @@ def config_delete(config_id):
         cfg = get_config_by_id(config_id)
         if not cfg:
             return jsonify({"error": "Config not found"}), 404
-        # demo.stop_streaming_if_active_config(config_id)
         video_handler.stop_streaming_if_active_config(config_id)
         deleted = delete_config(config_id)
         if not deleted:
@@ -389,13 +288,11 @@ def active_config_set():
     if not video_source:
         return jsonify({"error": "Config has no video source"}), 400
     try:
-        # demo.start_streaming(video_source, config_id=config_id)
         video_handler.switch_video_source(video_source, config_id)
         return jsonify(
             {
                 "message": "Active config set",
                 "video_source": video_source,
-                # "active_config_id": demo._active_config_id,
                 "active_config_id": video_handler._active_config_id,
             }
         )
