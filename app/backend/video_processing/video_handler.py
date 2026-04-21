@@ -8,7 +8,7 @@ import cv2
 
 from database import init_database, get_detection_classes_pipeline_maps
 from logger import get_logger
-from video_processing.cunsumer import FrameConsumer
+from video_processing.consumer import FrameConsumer
 from video_processing.inference import InferencePool
 from video_processing.tracking import TrackerProcess
 
@@ -41,6 +41,7 @@ class VideoHandler:
         self._tracker: TrackerProcess | None = None
         self._active_config_id: int | None = None
         self._class_names_in_order: list[str] = []
+        self._description_buffer: list[str] = []
 
         self.init_setup()
 
@@ -92,6 +93,7 @@ class VideoHandler:
             self._consumer.stop()
 
     def start_streaming(self, video_source: str, config_id: int):
+        self._description_buffer.clear()
         self._stop_event.clear()
         self.video_source = video_source
         self._active_config_id = config_id
@@ -122,6 +124,7 @@ class VideoHandler:
         if self._tracker is not None:
             self._tracker.reset()
 
+        self._description_buffer.clear()
         self._active_config_id = None
         self._streaming_started = False
         log.info("Streaming stopped")
@@ -157,6 +160,72 @@ class VideoHandler:
             if detections_class_count.get(item, 0) > 0:
                 description += f"{item}: {detections_class_count[item]}, "
         return description.rstrip(", ")
+
+    def _generate_summary(self, descriptions: list) -> str:
+        """Summarize PPE compliance over a list of detection descriptions."""
+        total_stats = defaultdict(int)
+        frame_count = len(descriptions)
+        for desc in descriptions:
+            for item in [
+                "Person",
+                "Hardhat",
+                "Safety Vest",
+                "Mask",
+                "NO-Hardhat",
+                "NO-Safety Vest",
+                "NO-Mask",
+            ]:
+                count = desc.count(item)
+                total_stats[item] += count
+
+        summary = "Safety Trends Summary:\n\n"
+        summary += f"Total observations: {frame_count} frames\n\n"
+
+        if total_stats["Person"] > 0:
+            hardhat_compliance = (
+                total_stats["Hardhat"]
+                / (total_stats["Hardhat"] + total_stats["NO-Hardhat"])
+                if (total_stats["Hardhat"] + total_stats["NO-Hardhat"]) > 0
+                else 0
+            )
+            vest_compliance = (
+                total_stats["Safety Vest"]
+                / (total_stats["Safety Vest"] + total_stats["NO-Safety Vest"])
+                if (total_stats["Safety Vest"] + total_stats["NO-Safety Vest"]) > 0
+                else 0
+            )
+            mask_compliance = (
+                total_stats["Mask"] / (total_stats["Mask"] + total_stats["NO-Mask"])
+                if (total_stats["Mask"] + total_stats["NO-Mask"]) > 0
+                else 0
+            )
+            summary += "Compliance rates:\n"
+            summary += f"\n• Hardhat compliance: {hardhat_compliance:.2%} ({total_stats['Hardhat']} out of {total_stats['Hardhat'] + total_stats['NO-Hardhat']} detections)"
+            summary += f"\n• Safety Vest compliance: {vest_compliance:.2%} ({total_stats['Safety Vest']} out of {total_stats['Safety Vest'] + total_stats['NO-Safety Vest']} detections)"
+            summary += f"\n• Mask compliance: {mask_compliance:.2%} ({total_stats['Mask']} out of {total_stats['Mask'] + total_stats['NO-Mask']} detections)"
+            overall_compliance = (
+                hardhat_compliance + vest_compliance + mask_compliance
+            ) / 3
+            summary += f"\n\nOverall PPE compliance: {overall_compliance:.2%}\n"
+            summary += "\nRecommendations:\n"
+            if overall_compliance < 0.8:
+                summary += f"\n• Critical: Immediate action required. {total_stats['NO-Hardhat'] + total_stats['NO-Safety Vest'] + total_stats['NO-Mask']} PPE violations detected."
+                summary += "\n• Conduct an emergency safety briefing."
+                summary += "\n• Increase on-site safety inspections."
+            elif overall_compliance < 0.95:
+                summary += f"\n• Warning: Improvement needed. {total_stats['NO-Hardhat'] + total_stats['NO-Safety Vest'] + total_stats['NO-Mask']} PPE violations detected."
+                summary += "\n• Reinforce PPE policies through team meetings."
+                summary += "\n• Consider additional PPE training sessions."
+            else:
+                summary += (
+                    "\n• Good compliance observed. Maintain current safety protocols."
+                )
+                summary += "\n• Continue regular safety reminders and training."
+        else:
+            summary += "\n• No people detected in the observed period."
+            summary += "\n• Check camera positioning and functionality."
+
+        return summary
 
     def draw_detections(self, frame, detections):
         """Draw bounding boxes and labels for each detection onto *frame* (mutated in-place).
@@ -262,6 +331,10 @@ class VideoHandler:
                 self.latest_description = self._format_detection_description(
                     result.counts, self._class_names_in_order
                 )
+                self._description_buffer.append(self.latest_description)
+                if len(self._description_buffer) > 50:
+                    self._description_buffer.pop(0)
+                self.latest_summary = self._generate_summary(self._description_buffer)
 
                 frame = self.draw_detections(result.frame, result.detections)
                 chunk = self.encode_mjpeg_chunk(frame)
