@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import json
-import logging
 import queue as queue_mod
 import threading
 from datetime import datetime
 from multiprocessing import Event, Process, Queue
-from multiprocessing.shared_memory import SharedMemory
 
 import numpy as np
 
-log = logging.getLogger(__name__)
+from logger import get_logger
+
+log = get_logger(__name__)
 
 _RESET = "_RESET"
-_INIT_SHM = "_INIT_SHM"
 _CONFIGURE = "_CONFIGURE"
 
 # ----- SQL / op constants (ported from db_write.py) -----
@@ -45,10 +44,11 @@ _OP_ORDER = (_OP_INSERT_TRACK, _OP_UPDATE_LAST_SEEN, _OP_INSERT_OBSERVATION)
 class TrackerProcess:
     """Fire-and-forget background process: DeepSORT tracking + batched DB writes.
 
-    The main thread pushes detections via ``submit`` (frame data via shared
-    memory, metadata via multiprocessing.Queue).  The process runs DeepSORT,
-    associates PPE items to tracked persons, and writes tracks/observations to
-    PostgreSQL in batches.  No results are returned to the caller.
+    The main thread pushes ``(tracker_input_dets, detections, frame)`` tuples
+    via :meth:`submit`.  The frame is pickled through the multiprocessing Queue
+    so every item the child receives owns its own copy — no shared-memory
+    races.  The child runs DeepSORT, associates PPE items to tracked persons,
+    and writes tracks/observations to PostgreSQL in batches.
     """
 
     def __init__(
@@ -63,22 +63,15 @@ class TrackerProcess:
 
         self._in_queue: Queue = Queue(maxsize=100)
         self._stop = Event()
-        self._frame_ready = Event()
         self._process: Process | None = None
-
-        self._shm: SharedMemory | None = None
-        self._shm_h = 0
-        self._shm_w = 0
 
     def start(self) -> None:
         self._stop.clear()
-        self._frame_ready.clear()
         self._process = Process(
             target=_tracker_process_target,
             args=(
                 self._in_queue,
                 self._stop,
-                self._frame_ready,
                 self._max_age,
                 self._n_init,
                 self._last_seen_update_interval,
@@ -95,7 +88,6 @@ class TrackerProcess:
                 self._process.terminate()
                 self._process.join(timeout=1.0)
             self._process = None
-        self._cleanup_shm()
 
     def configure(
         self,
@@ -121,64 +113,18 @@ class TrackerProcess:
         frame: np.ndarray,
         detections: list[dict],
     ) -> None:
-        """Fire-and-forget: copy frame to SHM, enqueue detection metadata."""
-        h, w = frame.shape[:2]
-
-        if self._shm is None or h != self._shm_h or w != self._shm_w:
-            self._init_shm(h, w)
-
-        buf = np.ndarray((h, w, 3), dtype=np.uint8, buffer=self._shm.buf)
-        buf[:] = frame
-
+        """Fire-and-forget: enqueue frame + detection metadata for the child process."""
         try:
-            self._in_queue.put_nowait((tracker_input_dets, detections))
+            self._in_queue.put_nowait((tracker_input_dets, detections, frame))
         except queue_mod.Full:
             log.warning("Tracker input queue full, dropping frame")
-            return
-
-        self._frame_ready.set()
 
     def reset(self) -> None:
         _drain(self._in_queue)
-        self._frame_ready.clear()
         try:
             self._in_queue.put_nowait(_RESET)
         except queue_mod.Full:
             log.warning("Tracker input queue full, reset message dropped")
-        self._cleanup_shm()
-
-    # -- internals --
-
-    def _init_shm(self, h: int, w: int) -> None:
-        self._cleanup_shm()
-        size = h * w * 3
-        self._shm = SharedMemory(create=True, size=size)
-        self._shm_h, self._shm_w = h, w
-        try:
-            self._in_queue.put(
-                {
-                    "kind": _INIT_SHM,
-                    "shm_name": self._shm.name,
-                    "h": h,
-                    "w": w,
-                },
-                timeout=5.0,
-            )
-        except queue_mod.Full:
-            log.error("Tracker: failed to send INIT_SHM (queue full)")
-            self._cleanup_shm()
-        log.info(f"Tracker: shared memory created {h}x{w} name={self._shm.name}")
-
-    def _cleanup_shm(self) -> None:
-        if self._shm is not None:
-            try:
-                self._shm.close()
-                self._shm.unlink()
-            except Exception:
-                pass
-            self._shm = None
-            self._shm_h = 0
-            self._shm_w = 0
 
 
 # ----- Batch DB writer (runs inside the tracker process) -----
@@ -348,11 +294,14 @@ def _associate_ppe_to_person(
 def _tracker_process_target(
     in_q: Queue,
     stop_event: Event,
-    frame_ready: Event,
     max_age: int,
     n_init: int,
     last_seen_update_interval: int,
 ) -> None:
+    from logger import get_logger
+
+    log = get_logger(__name__)
+
     tracker = _Tracker(
         max_age=max_age,
         n_init=n_init,
@@ -360,22 +309,9 @@ def _tracker_process_target(
     )
     db = _BatchDbWriter()
 
-    shm: SharedMemory | None = None
-    shm_h = shm_w = 0
-
     trackable_by_class_id: dict[int, bool] = {}
     detection_class_name_to_id: dict[str, int] = {}
     person_last_state: dict[int, tuple] = {}
-
-    def close_shm() -> None:
-        nonlocal shm, shm_h, shm_w
-        if shm is not None:
-            try:
-                shm.close()
-            except Exception:
-                pass
-            shm = None
-            shm_h = shm_w = 0
 
     log.info("Tracker process started")
     try:
@@ -384,31 +320,14 @@ def _tracker_process_target(
                 item = in_q.get(timeout=0.05)
             except queue_mod.Empty:
                 continue
-            # log.info(f"size of the in_queue {in_q.qsize()}")
+
             if item == _RESET:
                 tracker.reset()
                 person_last_state.clear()
-                close_shm()
                 continue
 
             if isinstance(item, dict):
                 kind = item.get("kind")
-                if kind == _INIT_SHM:
-                    close_shm()
-                    shm_name = item["shm_name"]
-                    shm_h, shm_w = int(item["h"]), int(item["w"])
-                    try:
-                        shm = SharedMemory(name=shm_name)
-                    except Exception:
-                        log.exception(f"Tracker: failed to attach SHM name={shm_name}")
-                        shm = None
-                        shm_h = shm_w = 0
-                    else:
-                        log.info(
-                            f"Tracker: attached SHM name={shm_name} {shm_h}x{shm_w}"
-                        )
-                    continue
-
                 if kind == _CONFIGURE:
                     trackable_by_class_id = item["trackable_by_class_id"]
                     detection_class_name_to_id = item["detection_class_name_to_id"]
@@ -420,29 +339,14 @@ def _tracker_process_target(
                     )
                     continue
 
-            # -- Normal work item --
-            if shm is None:
-                log.warning("Tracker: work item received but no SHM attached, skipping")
-                continue
+            tracker_input_dets, detections, frame = item
 
-            if not frame_ready.wait(timeout=0.15):
-                log.debug("Tracker: frame_ready timeout, skipping work item")
-                continue
-
-            buf = np.ndarray((shm_h, shm_w, 3), dtype=np.uint8, buffer=shm.buf)
-            frame = buf.copy()
-            frame_ready.clear()
-
-            tracker_input_dets, detections = item
-
-            # 1-3. DeepSORT update + assign track IDs + update history
             result = tracker.update(
                 tracker_input_dets, frame, detections, trackable_by_class_id
             )
 
             now = datetime.now()
 
-            # 4-6. Track history DB ops + PPE association + observations
             frame_batch: list[tuple[str, tuple]] = []
             for track_id, person_bbox in result.tracked_boxes.items():
                 if track_id in result.new_track_ids:
@@ -481,14 +385,12 @@ def _tracker_process_target(
                     )
                     person_last_state[track_id] = current_state
 
-            # 7. Hand off to writer thread (non-blocking unless queue full)
             db.submit_batch(frame_batch)
 
     except Exception:
         log.exception("Tracker process crashed")
     finally:
         db.close()
-        close_shm()
         log.info("Tracker process exited")
 
 

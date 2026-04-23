@@ -324,10 +324,6 @@ class VideoHandler:
                 if result is None:
                     continue
 
-                self._tracker.submit(
-                    result.tracker_input_dets, result.frame, result.detections
-                )
-
                 self.latest_description = self._format_detection_description(
                     result.counts, self._class_names_in_order
                 )
@@ -341,13 +337,18 @@ class VideoHandler:
                 if chunk is None:
                     continue
 
+                self._tracker.submit(
+                    result.tracker_input_dets, result.frame, result.detections
+                )
+
                 elapsed = time.perf_counter() - last_yield_time
                 sleep_time = frame_interval - elapsed
                 if sleep_time > 0:
                     time.sleep(sleep_time)
                 log.info(
-                    f"Time elapsed: {elapsed} seconds, Sleeping for {sleep_time} seconds"
+                    f"Time elapsed: {elapsed * 1000:.2f} ms, Sleeping for {sleep_time * 1000:.2f} ms"
                 )
+
                 last_yield_time = time.perf_counter()
 
                 try:
