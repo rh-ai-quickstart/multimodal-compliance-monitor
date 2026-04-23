@@ -5,7 +5,8 @@ import logging
 import os
 import queue as queue_mod
 import threading
-import time
+
+# import time
 from collections import defaultdict
 
 import numpy as np
@@ -33,7 +34,6 @@ class InferenceResult:
     frame_id: int
     detections: list[dict]
     counts: defaultdict
-    tracker_input_dets: list
 
 
 @dataclasses.dataclass(frozen=True)
@@ -279,7 +279,7 @@ class InferencePool:
                     continue
 
                 # -- batched inference --
-                t0 = time.perf_counter()
+                # t0 = time.perf_counter()
                 frames = [f for f, _ in batch]
                 frame_ids = [fid for _, fid in batch]
 
@@ -296,7 +296,7 @@ class InferencePool:
                     continue
 
                 for i, dets_raw in enumerate(all_detections):
-                    detections, counts, tracker_input_dets = process_detections(
+                    detections, counts = process_detections(
                         dets_raw,
                         cfg.include_in_counts,
                         cfg.trackable,
@@ -307,21 +307,20 @@ class InferencePool:
                             frame_id=frame_ids[i],
                             detections=detections,
                             counts=counts,
-                            tracker_input_dets=tracker_input_dets,
                         )
                     )
 
-                elapsed = time.perf_counter() - t0
-                fps = len(batch) / elapsed if elapsed > 0 else float("inf")
-                log.info(
-                    "%s batch=%d frames=[%d..%d] elapsed=%.4fs fps=%.1f",
-                    name,
-                    len(batch),
-                    frame_ids[0],
-                    frame_ids[-1],
-                    elapsed,
-                    fps,
-                )
+                # elapsed = time.perf_counter() - t0
+                # fps = len(batch) / elapsed if elapsed > 0 else float("inf")
+                # log.info(
+                #     "%s batch=%d frames=[%d..%d] elapsed=%.4fs fps=%.1f",
+                #     name,
+                #     len(batch),
+                #     frame_ids[0],
+                #     frame_ids[-1],
+                #     elapsed,
+                #     fps,
+                # )
 
         except Exception:
             log.exception("%s crashed", name)

@@ -188,6 +188,14 @@ def _init_schema():
         log.info("PostgreSQL database initialized: %s:%s/%s", DB_HOST, DB_PORT, DB_NAME)
 
 
+def get_max_track_id() -> int:
+    """Return the highest track_id in detection_tracks, or 0 if empty."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COALESCE(MAX(track_id), 0) FROM detection_tracks")
+        return int(cursor.fetchone()[0])
+
+
 # ----- Write Operations (used by tracker) -----
 
 

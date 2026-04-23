@@ -7,6 +7,7 @@ from datetime import datetime
 from multiprocessing import Event, Process, Queue
 
 import numpy as np
+import supervision as sv
 
 from logger import get_logger
 
@@ -40,15 +41,17 @@ _SQL_BY_OP = {
 
 _OP_ORDER = (_OP_INSERT_TRACK, _OP_UPDATE_LAST_SEEN, _OP_INSERT_OBSERVATION)
 
+_MAX_DRAIN = 8
+
 
 class TrackerProcess:
-    """Fire-and-forget background process: DeepSORT tracking + batched DB writes.
+    """Fire-and-forget background process: ByteTrack tracking + batched DB writes.
 
-    The main thread pushes ``(tracker_input_dets, detections, frame)`` tuples
-    via :meth:`submit`.  The frame is pickled through the multiprocessing Queue
-    so every item the child receives owns its own copy — no shared-memory
-    races.  The child runs DeepSORT, associates PPE items to tracked persons,
-    and writes tracks/observations to PostgreSQL in batches.
+    The main thread pushes detection dicts via :meth:`submit`.  No frame pixels
+    are sent through the queue (ByteTrack is motion-only, no embedding CNN).
+    The child runs ByteTrack, associates PPE items to tracked persons via
+    vectorized numpy overlap, and writes tracks/observations to PostgreSQL in
+    batches.
     """
 
     def __init__(
@@ -107,15 +110,10 @@ class TrackerProcess:
         except queue_mod.Full:
             log.error("Tracker: failed to send CONFIGURE (queue full)")
 
-    def submit(
-        self,
-        tracker_input_dets: list,
-        frame: np.ndarray,
-        detections: list[dict],
-    ) -> None:
-        """Fire-and-forget: enqueue frame + detection metadata for the child process."""
+    def submit(self, detections: list[dict]) -> None:
+        """Fire-and-forget: enqueue detection dicts for the child process."""
         try:
-            self._in_queue.put_nowait((tracker_input_dets, detections, frame))
+            self._in_queue.put_nowait(detections)
         except queue_mod.Full:
             log.warning("Tracker input queue full, dropping frame")
 
@@ -190,7 +188,7 @@ class _BatchDbWriter:
                     combined.extend(b)
 
                 if combined:
-                    log.info(
+                    log.debug(
                         "DB writer: flushing %d ops from %d batches",
                         len(combined),
                         len(batches),
@@ -259,7 +257,7 @@ class _BatchDbWriter:
             self._conn = None
 
 
-# ----- PPE association -----
+# ----- PPE association (vectorized) -----
 
 _PPE_MAPPING = {
     "Hardhat": ("hardhat", True),
@@ -270,22 +268,63 @@ _PPE_MAPPING = {
     "NO-Mask": ("mask", False),
 }
 
+_EMPTY_PPE = {"hardhat": None, "vest": None, "mask": None}
 
-def _associate_ppe_to_person(
-    person_bbox: tuple[int, int, int, int],
-    all_detections: list[dict],
-) -> dict[str, bool | None]:
-    """Determine PPE status for a person based on bounding box overlap."""
-    status: dict[str, bool | None] = {"hardhat": None, "vest": None, "mask": None}
-    for det in all_detections:
-        mapping = _PPE_MAPPING.get(det["class_name"])
-        if mapping is None:
-            continue
-        if _boxes_overlap(person_bbox, det["bbox"]):
-            ppe_type, ppe_value = mapping
-            if status[ppe_type] is None:
-                status[ppe_type] = ppe_value
-    return status
+
+def _batch_associate_ppe(
+    person_xyxy: np.ndarray,
+    all_det_xyxy: np.ndarray,
+    all_det_classes: list[str],
+) -> list[dict[str, bool | None]]:
+    """Vectorized PPE association for all persons against all detections.
+
+    Computes a (P, K) overlap matrix in one numpy broadcast, then walks
+    only the sparse hits to assign first-match-wins PPE status.
+    """
+    n_persons = len(person_xyxy)
+    if n_persons == 0:
+        return []
+
+    ppe_indices = [i for i, cn in enumerate(all_det_classes) if cn in _PPE_MAPPING]
+    if not ppe_indices:
+        return [dict(_EMPTY_PPE) for _ in range(n_persons)]
+
+    ppe_idx_arr = np.array(ppe_indices)
+    ppe_xyxy = all_det_xyxy[ppe_idx_arr]
+
+    # (P, K) boolean overlap matrix via broadcast
+    overlap = (
+        (person_xyxy[:, 0:1] <= ppe_xyxy[:, 2])
+        & (person_xyxy[:, 2:3] >= ppe_xyxy[:, 0])
+        & (person_xyxy[:, 1:2] <= ppe_xyxy[:, 3])
+        & (person_xyxy[:, 3:4] >= ppe_xyxy[:, 1])
+    )
+
+    results: list[dict[str, bool | None]] = [dict(_EMPTY_PPE) for _ in range(n_persons)]
+    for k_idx, det_idx in enumerate(ppe_indices):
+        ppe_type, ppe_val = _PPE_MAPPING[all_det_classes[det_idx]]
+        for p in np.where(overlap[:, k_idx])[0]:
+            if results[p][ppe_type] is None:
+                results[p][ppe_type] = ppe_val
+    return results
+
+
+def _dicts_to_sv_detections(detections: list[dict]) -> sv.Detections:
+    """Convert the app's detection dicts to a supervision Detections object."""
+    if not detections:
+        return sv.Detections.empty()
+
+    xyxy = np.array([d["bbox"] for d in detections], dtype=np.float32)
+    confidence = np.array([d["confidence"] for d in detections], dtype=np.float32)
+    class_id = np.array([d["class_id"] for d in detections], dtype=int)
+    class_names = np.array([d["class_name"] for d in detections])
+
+    return sv.Detections(
+        xyxy=xyxy,
+        confidence=confidence,
+        class_id=class_id,
+        data={"class_name": class_names},
+    )
 
 
 # ----- Process target -----
@@ -302,10 +341,16 @@ def _tracker_process_target(
 
     log = get_logger(__name__)
 
+    from database import get_max_track_id
+
+    track_id_offset = get_max_track_id()
+    log.info("Tracker: resuming with track_id_offset=%d", track_id_offset)
+
     tracker = _Tracker(
         max_age=max_age,
         n_init=n_init,
         last_seen_update_interval=last_seen_update_interval,
+        track_id_offset=track_id_offset,
     )
     db = _BatchDbWriter()
 
@@ -316,76 +361,136 @@ def _tracker_process_target(
     log.info("Tracker process started")
     try:
         while not stop_event.is_set():
+            # --- Drain up to _MAX_DRAIN items from the queue ---
             try:
-                item = in_q.get(timeout=0.05)
+                first = in_q.get(timeout=0.1)
             except queue_mod.Empty:
                 continue
 
-            if item == _RESET:
-                tracker.reset()
-                person_last_state.clear()
-                continue
+            raw_items = [first]
+            while len(raw_items) < _MAX_DRAIN:
+                try:
+                    raw_items.append(in_q.get_nowait())
+                except queue_mod.Empty:
+                    break
 
-            if isinstance(item, dict):
-                kind = item.get("kind")
-                if kind == _CONFIGURE:
-                    trackable_by_class_id = item["trackable_by_class_id"]
-                    detection_class_name_to_id = item["detection_class_name_to_id"]
+            det_frames: list[list[dict]] = []
+            for item in raw_items:
+                if item == _RESET:
+                    tracker.reset()
                     person_last_state.clear()
-                    log.info(
-                        "Tracker: configured with %d trackable classes, %d name-to-id mappings",
-                        sum(1 for v in trackable_by_class_id.values() if v),
-                        len(detection_class_name_to_id),
-                    )
+                    det_frames.clear()
                     continue
 
-            tracker_input_dets, detections, frame = item
-
-            result = tracker.update(
-                tracker_input_dets, frame, detections, trackable_by_class_id
-            )
-
-            now = datetime.now()
-
-            frame_batch: list[tuple[str, tuple]] = []
-            for track_id, person_bbox in result.tracked_boxes.items():
-                if track_id in result.new_track_ids:
-                    tname = result.track_det_class.get(track_id)
-                    dcid = detection_class_name_to_id.get(tname) if tname else None
-                    if dcid is not None:
-                        frame_batch.append(
-                            (_OP_INSERT_TRACK, (track_id, dcid, now, now))
+                if isinstance(item, dict):
+                    kind = item.get("kind")
+                    if kind == _CONFIGURE:
+                        trackable_by_class_id = item["trackable_by_class_id"]
+                        detection_class_name_to_id = item["detection_class_name_to_id"]
+                        person_last_state.clear()
+                        log.info(
+                            "Tracker: configured with %d trackable classes, "
+                            "%d name-to-id mappings",
+                            sum(1 for v in trackable_by_class_id.values() if v),
+                            len(detection_class_name_to_id),
                         )
-                elif track_id in result.updated_track_ids:
-                    frame_batch.append((_OP_UPDATE_LAST_SEEN, (now, track_id)))
+                        det_frames.clear()
+                        continue
 
-                ppe_status = _associate_ppe_to_person(person_bbox, detections)
-                current_state = (
-                    ppe_status["hardhat"],
-                    ppe_status["vest"],
-                    ppe_status["mask"],
+                det_frames.append(item)
+
+            if not det_frames:
+                continue
+
+            # --- Phase 1: Sequential ByteTrack updates ---
+            tracker_results: list[tuple[_TrackerResult, list[dict]]] = []
+            for detections in det_frames:
+                sv_dets = _dicts_to_sv_detections(detections)
+                result = tracker.update(sv_dets, trackable_by_class_id)
+                tracker_results.append((result, detections))
+
+            # --- Phase 2: Vectorized PPE association across all frames ---
+            all_person_xyxy: list[np.ndarray] = []
+            all_det_xyxy: list[np.ndarray] = []
+            all_det_classes: list[list[str]] = []
+            person_counts: list[int] = []
+
+            for result, detections in tracker_results:
+                boxes = result.tracked_boxes
+                n_p = len(boxes)
+                person_counts.append(n_p)
+                if n_p > 0:
+                    all_person_xyxy.append(
+                        np.array(list(boxes.values()), dtype=np.float32)
+                    )
+                det_xyxy = (
+                    np.array([d["bbox"] for d in detections], dtype=np.float32)
+                    if detections
+                    else np.empty((0, 4), dtype=np.float32)
                 )
-                last_state = person_last_state.get(track_id)
+                all_det_xyxy.append(det_xyxy)
+                all_det_classes.append([d["class_name"] for d in detections])
 
-                if last_state is None or last_state != current_state:
-                    attributes = {
-                        k: v
-                        for k, v in [
-                            ("hardhat", ppe_status["hardhat"]),
-                            ("vest", ppe_status["vest"]),
-                            ("mask", ppe_status["mask"]),
-                        ]
-                        if v is not None
-                    }
-                    frame_batch.append(
-                        (
-                            _OP_INSERT_OBSERVATION,
-                            (track_id, now, json.dumps(attributes)),
+            ppe_results_by_frame: list[list[dict[str, bool | None]]] = []
+            for i, (result, detections) in enumerate(tracker_results):
+                if person_counts[i] > 0:
+                    ppe_results_by_frame.append(
+                        _batch_associate_ppe(
+                            all_person_xyxy.pop(0),
+                            all_det_xyxy[i],
+                            all_det_classes[i],
                         )
                     )
-                    person_last_state[track_id] = current_state
+                else:
+                    ppe_results_by_frame.append([])
 
-            db.submit_batch(frame_batch)
+            # --- Phase 3: Sequential state diff + combined DB ops ---
+            now = datetime.now()
+            combined_batch: list[tuple[str, tuple]] = []
+
+            for frame_idx, (result, detections) in enumerate(tracker_results):
+                person_idx = 0
+                for track_id, person_bbox in result.tracked_boxes.items():
+                    if track_id in result.new_track_ids:
+                        tname = result.track_det_class.get(track_id)
+                        dcid = detection_class_name_to_id.get(tname) if tname else None
+                        if dcid is not None:
+                            combined_batch.append(
+                                (_OP_INSERT_TRACK, (track_id, dcid, now, now))
+                            )
+                    elif track_id in result.updated_track_ids:
+                        combined_batch.append((_OP_UPDATE_LAST_SEEN, (now, track_id)))
+
+                    ppe_status = ppe_results_by_frame[frame_idx][person_idx]
+                    person_idx += 1
+
+                    current_state = (
+                        ppe_status["hardhat"],
+                        ppe_status["vest"],
+                        ppe_status["mask"],
+                    )
+                    last_state = person_last_state.get(track_id)
+
+                    if last_state is None or last_state != current_state:
+                        attributes = {
+                            k: v for k, v in ppe_status.items() if v is not None
+                        }
+                        combined_batch.append(
+                            (
+                                _OP_INSERT_OBSERVATION,
+                                (track_id, now, json.dumps(attributes)),
+                            )
+                        )
+                        person_last_state[track_id] = current_state
+
+                _assign_track_ids(
+                    detections,
+                    trackable_by_class_id,
+                    result.tracked_boxes,
+                    result.track_det_class,
+                )
+
+            db.submit_batch(combined_batch)
 
     except Exception:
         log.exception("Tracker process crashed")
@@ -406,63 +511,71 @@ def _drain(q: Queue) -> None:
 
 
 class _Tracker:
-    """Internal DeepSORT wrapper -- only called from within the tracker process."""
+    """Internal ByteTrack wrapper -- only called from within the tracker process."""
 
     def __init__(
         self,
         max_age: int = 30,
         n_init: int = 3,
         last_seen_update_interval: int = 30,
+        track_id_offset: int = 0,
     ) -> None:
-        from deep_sort_realtime.deepsort_tracker import DeepSort
-
         self._max_age = max_age
         self._n_init = n_init
         self._last_seen_update_interval = last_seen_update_interval
+        self._track_id_offset = track_id_offset
 
-        self._tracker = DeepSort(max_age=max_age, n_init=n_init)
+        self._tracker = sv.ByteTrack(
+            lost_track_buffer=max_age,
+            minimum_consecutive_frames=n_init,
+        )
         self._track_history: dict[int, dict[str, datetime]] = {}
         self._frames_since_last_seen_update = 0
 
     def reset(self) -> None:
-        from deep_sort_realtime.deepsort_tracker import DeepSort
-
-        self._tracker = DeepSort(max_age=self._max_age, n_init=self._n_init)
+        self._tracker = sv.ByteTrack(
+            lost_track_buffer=self._max_age,
+            minimum_consecutive_frames=self._n_init,
+        )
         self._track_history = {}
         self._frames_since_last_seen_update = 0
 
     def update(
         self,
-        tracker_input_dets: list,
-        frame: np.ndarray,
-        detections: list[dict],
+        sv_dets: sv.Detections,
         trackable_by_class_id: dict[int, bool],
     ) -> _TrackerResult:
         tracked_boxes: dict[int, tuple[int, int, int, int]] = {}
         track_det_class: dict[int, str] = {}
 
-        if tracker_input_dets:
-            tracks = []
-            try:
-                tracks = self._tracker.update_tracks(tracker_input_dets, frame=frame)
-            except IndexError as e:
-                log.error(f"Tracker IndexError: {e}", exc_info=True)
+        if len(sv_dets) > 0:
+            mask = (
+                np.array(
+                    [
+                        trackable_by_class_id.get(int(cid), False)
+                        for cid in sv_dets.class_id
+                    ]
+                )
+                if sv_dets.class_id is not None
+                else np.zeros(len(sv_dets), dtype=bool)
+            )
 
-            for track in tracks:
-                if not track.is_confirmed():
-                    continue
-                track_id = int(track.track_id)
-                ltrb = track.to_ltrb()
-                if ltrb is not None:
-                    x1, y1, x2, y2 = map(int, ltrb)
-                    tracked_boxes[track_id] = (x1, y1, x2, y2)
-                dc = track.get_det_class()
-                if dc:
-                    track_det_class[track_id] = dc
+            trackable_dets = sv_dets[mask]
 
-        _assign_track_ids(
-            detections, trackable_by_class_id, tracked_boxes, track_det_class
-        )
+            if len(trackable_dets) > 0:
+                tracked = self._tracker.update_with_detections(trackable_dets)
+
+                for i in range(len(tracked)):
+                    tid = int(tracked.tracker_id[i]) + self._track_id_offset
+                    x1, y1, x2, y2 = tracked.xyxy[i].astype(int)
+                    tracked_boxes[tid] = (int(x1), int(y1), int(x2), int(y2))
+                    if (
+                        tracked.data.get("class_name") is not None
+                        and len(tracked.data["class_name"]) > i
+                    ):
+                        track_det_class[tid] = tracked.data["class_name"][i]
+            else:
+                self._tracker.update_with_detections(sv.Detections.empty())
 
         new_track_ids, updated_track_ids = self._update_history(tracked_boxes)
 
