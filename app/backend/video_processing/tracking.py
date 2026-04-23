@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import queue as queue_mod
+import threading
 from datetime import datetime
 from multiprocessing import Event, Process, Queue
 from multiprocessing.shared_memory import SharedMemory
@@ -77,7 +78,6 @@ class TrackerProcess:
             args=(
                 self._in_queue,
                 self._stop,
-                self._frame_ready,
                 self._frame_ready,
                 self._max_age,
                 self._n_init,
@@ -185,21 +185,81 @@ class TrackerProcess:
 
 
 class _BatchDbWriter:
-    """Accumulates (op, args) tuples and flushes them in a single transaction."""
+    """Offloads DB writes to a dedicated background thread.
+
+    The tracker loop builds a batch of ``(op, args)`` tuples per frame and
+    hands the whole list to :meth:`submit_batch`.  A single writer thread
+    drains *all* pending batches from a bounded queue, merges them into one
+    combined transaction, and flushes to PostgreSQL -- so multiple frames
+    that pile up while the DB is busy collapse into a single round-trip.
+    """
+
+    _QUEUE_MAXSIZE = 64
 
     def __init__(self) -> None:
-        self._batch: list[tuple[str, tuple]] = []
+        self._queue: queue_mod.Queue[list[tuple[str, tuple]] | None] = queue_mod.Queue(
+            maxsize=self._QUEUE_MAXSIZE
+        )
         self._conn = None
+        self._thread = threading.Thread(
+            target=self._writer_loop, name="db-writer", daemon=True
+        )
+        self._thread.start()
 
-    def enqueue(self, op: str, args: tuple) -> None:
-        self._batch.append((op, args))
-
-    def flush(self) -> None:
-        if not self._batch:
+    def submit_batch(self, batch: list[tuple[str, tuple]]) -> None:
+        """Hand off a frame's DB ops to the writer thread (blocks if queue full)."""
+        if not batch:
             return
-        batch = self._batch
-        self._batch = []
+        self._queue.put(batch)
 
+    def close(self) -> None:
+        """Signal the writer thread to drain remaining work and exit."""
+        self._queue.put(None)
+        self._thread.join(timeout=10.0)
+        if self._thread.is_alive():
+            log.warning("DB writer: thread did not exit in time")
+
+    def _writer_loop(self) -> None:
+        log.info("DB writer thread started")
+        try:
+            while True:
+                first = self._queue.get()
+                if first is None:
+                    break
+
+                batches = [first]
+                sentinel_seen = False
+                while True:
+                    try:
+                        item = self._queue.get_nowait()
+                    except queue_mod.Empty:
+                        break
+                    if item is None:
+                        sentinel_seen = True
+                        break
+                    batches.append(item)
+
+                combined: list[tuple[str, tuple]] = []
+                for b in batches:
+                    combined.extend(b)
+
+                if combined:
+                    log.info(
+                        "DB writer: flushing %d ops from %d batches",
+                        len(combined),
+                        len(batches),
+                    )
+                    self._flush(combined)
+
+                if sentinel_seen:
+                    break
+        except Exception:
+            log.exception("DB writer thread crashed")
+        finally:
+            self._close_conn()
+            log.info("DB writer thread exited")
+
+    def _flush(self, batch: list[tuple[str, tuple]]) -> None:
         groups: dict[str, list[tuple]] = {}
         for op, args in batch:
             groups.setdefault(op, []).append(args)
@@ -217,7 +277,7 @@ class _BatchDbWriter:
                     cursor.executemany(_SQL_BY_OP[op], rows)
             conn.commit()
         except Exception:
-            log.exception(f"DB writer: batch failed, dropping {len(batch)} items")
+            log.exception(f"DB writer: batch failed ({len(batch)} items), retrying")
             self._close_conn()
             try:
                 conn = self._ensure_conn()
@@ -231,10 +291,6 @@ class _BatchDbWriter:
             except Exception:
                 log.exception(f"DB writer: retry failed, dropping {len(batch)} items")
                 self._close_conn()
-
-    def close(self) -> None:
-        self.flush()
-        self._close_conn()
 
     def _ensure_conn(self):
         import psycopg2
@@ -328,7 +384,7 @@ def _tracker_process_target(
                 item = in_q.get(timeout=0.05)
             except queue_mod.Empty:
                 continue
-            log.info(f"size of the in_queue {in_q.qsize()}")
+            # log.info(f"size of the in_queue {in_q.qsize()}")
             if item == _RESET:
                 tracker.reset()
                 person_last_state.clear()
@@ -387,17 +443,18 @@ def _tracker_process_target(
             now = datetime.now()
 
             # 4-6. Track history DB ops + PPE association + observations
+            frame_batch: list[tuple[str, tuple]] = []
             for track_id, person_bbox in result.tracked_boxes.items():
-                # DB: insert new track / update last_seen
                 if track_id in result.new_track_ids:
                     tname = result.track_det_class.get(track_id)
                     dcid = detection_class_name_to_id.get(tname) if tname else None
                     if dcid is not None:
-                        db.enqueue(_OP_INSERT_TRACK, (track_id, dcid, now, now))
+                        frame_batch.append(
+                            (_OP_INSERT_TRACK, (track_id, dcid, now, now))
+                        )
                 elif track_id in result.updated_track_ids:
-                    db.enqueue(_OP_UPDATE_LAST_SEEN, (now, track_id))
+                    frame_batch.append((_OP_UPDATE_LAST_SEEN, (now, track_id)))
 
-                # PPE association + observation on state change
                 ppe_status = _associate_ppe_to_person(person_bbox, detections)
                 current_state = (
                     ppe_status["hardhat"],
@@ -416,14 +473,16 @@ def _tracker_process_target(
                         ]
                         if v is not None
                     }
-                    db.enqueue(
-                        _OP_INSERT_OBSERVATION,
-                        (track_id, now, json.dumps(attributes)),
+                    frame_batch.append(
+                        (
+                            _OP_INSERT_OBSERVATION,
+                            (track_id, now, json.dumps(attributes)),
+                        )
                     )
                     person_last_state[track_id] = current_state
 
-            # 7. Flush DB batch
-            db.flush()
+            # 7. Hand off to writer thread (non-blocking unless queue full)
+            db.submit_batch(frame_batch)
 
     except Exception:
         log.exception("Tracker process crashed")
