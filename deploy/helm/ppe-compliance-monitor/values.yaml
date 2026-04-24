@@ -19,6 +19,14 @@ backend:
   defaultOvmsModelUrl: "http://ppe-predictor:9000"
   # gRPC predict deadline (seconds) for ovmsclient; CPU OVMS on OpenShift often needs >10s on cold start
   ovmsGrpcTimeout: "60"
+  # Sized for default INFERENCE_WORKERS=4 (gRPC clients + preprocess in backend; model runs on predictor).
+  resources:
+    requests:
+      cpu: "2"
+      memory: 4Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
 
 openai:
   apiToken: ""
@@ -190,13 +198,14 @@ modelServing:
   replicas:
     min: 1
     max: 1
+  # Passed to runtime deployer (RESOURCE_* → InferenceService predictor). Raise for CPU-bound OVMS throughput.
   resources:
     requests:
-      cpu: "2"
-      memory: 4Gi
-    limits:
       cpu: "4"
-      memory: 16Gi
+      memory: 8Gi
+    limits:
+      cpu: "8"
+      memory: 24Gi
   # OpenVINO Model Server config (used when runtimeType=openvino)
   openvino:
     image: "registry.redhat.io/rhoai/odh-openvino-model-server-rhel9@sha256:7daebf4a4205b9b81293932a1dfec705f59a83de8097e468e875088996c1f224"

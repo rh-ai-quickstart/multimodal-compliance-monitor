@@ -57,6 +57,8 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
           env:
             - name: CORS_ORIGINS
               value: {{ default (printf "http://%s-frontend:%d" (include "ppe-compliance-monitor.fullname" .) .Values.frontend.port) .Values.backend.corsOrigins | quote }}

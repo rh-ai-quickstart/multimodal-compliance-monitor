@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 _MSG_CONFIGURE = "_CONFIGURE"
 
-_DEFAULT_WORKERS = 2
+_DEFAULT_WORKERS = 4
 _DEFAULT_MIN_BATCH = 3
 _DEFAULT_MAX_BATCH = 3
 
