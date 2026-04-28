@@ -19,7 +19,8 @@ from chat.nodes import (
 )
 from chat.state import ChatState
 from logger import get_logger
-from tools.mcp_tools import current_app_config_id, load_sql_tool_only
+from tools.mcp_tools import current_app_config_id, load_execute_sql_tool
+from langchain_core.tools import StructuredTool
 
 log = get_logger(__name__)
 
@@ -28,14 +29,14 @@ def _route_after_router(state: ChatState) -> str:
     return state["route"]
 
 
-def _build_graph(llm: ChatOpenAI, sql_tools: list) -> StateGraph:
+def _build_graph(llm: ChatOpenAI, execute_sql_tool: StructuredTool) -> StateGraph:
     graph = StateGraph(ChatState)
 
     graph.add_node("clarifier", make_clarifier_node(llm))
     graph.add_node("router", make_router_node(llm))
     graph.add_node("context_answer", make_context_answer_node(llm))
     graph.add_node("sql_planner", make_sql_planner_node(llm))
-    graph.add_node("sql_agent", make_sql_agent_node(llm, sql_tools))
+    graph.add_node("sql_agent", make_sql_agent_node(llm, execute_sql_tool))
     graph.add_node("sql_answer", make_sql_answer_node(llm))
 
     graph.add_edge(START, "clarifier")
@@ -76,18 +77,17 @@ class LLMChat:
             streaming=True,
         )
 
-        sql_tools = asyncio.run(load_sql_tool_only())
+        execute_sql_tool = asyncio.run(load_execute_sql_tool())
 
         self._memory = MemorySaver()
-        graph = _build_graph(llm, sql_tools)
+        graph = _build_graph(llm, execute_sql_tool)
         self._app = graph.compile(checkpointer=self._memory)
         self._session_versions: dict[str, int] = {}
 
         log.info(
-            "LLMChat initialised — endpoint=%s, model=%s, sql_tools=%d",
+            "LLMChat initialised — endpoint=%s, model=%s",
             endpoint,
             model,
-            len(sql_tools),
         )
 
     def _thread_id(self, session_id: str) -> str:

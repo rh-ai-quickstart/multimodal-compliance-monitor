@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
+from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from chat.prompts import (
@@ -14,6 +16,7 @@ from chat.prompts import (
     build_sql_answer_prompt,
     build_sql_planner_prompt,
     build_sql_agent_prompt,
+    build_sql_generator_prompt,
 )
 from chat.state import ChatState
 from logger import get_logger
@@ -116,16 +119,52 @@ def make_sql_planner_node(llm: ChatOpenAI):
     return sql_planner_node
 
 
-def make_sql_agent_node(llm: ChatOpenAI, sql_tools: list):
+def make_sql_agent_node(llm: ChatOpenAI, execute_sql_tool: StructuredTool):
     async def sql_agent_node(state: ChatState) -> dict:
-        system_prompt = build_sql_agent_prompt(
-            app_config_id=state.get("app_config_id"),
-            classes_info=state.get("classes_info"),
-            metrics=state.get("metrics"),
+        app_config_id = state.get("app_config_id")
+        classes_info = state.get("classes_info")
+
+        generator_prompt = build_sql_generator_prompt(
+            app_config_id=app_config_id,
+            classes_info=classes_info,
         )
-        agent = create_react_agent(llm, sql_tools, prompt=system_prompt)
+
+        @tool
+        async def query_metric(metric: str, error_context: str = "") -> str:
+            """Generate and execute a SQL query for the given metric.
+
+            Args:
+                metric: The metric description to query.
+                error_context: Optional error from a previous attempt so the
+                    query can be corrected.
+            """
+            human_content = metric
+            if error_context:
+                human_content += (
+                    f"\n\nPrevious attempt failed with this error:\n"
+                    f"{error_context}\nFix the query."
+                )
+            msgs = [
+                SystemMessage(content=generator_prompt),
+                HumanMessage(content=human_content),
+            ]
+            resp = await llm.ainvoke(msgs)
+            sql = resp.content.strip()
+            log.info("Generated SQL for metric %r: %s", metric, sql)
+
+            result = await execute_sql_tool.ainvoke({"sql": sql})
+            return result
+
+        agent_prompt = build_sql_agent_prompt(
+            app_config_id=app_config_id,
+            classes_info=classes_info,
+        )
+        agent = create_agent(llm, [query_metric], system_prompt=agent_prompt)
+
+        metrics = state.get("metrics", [])
+        metrics_msg = "\n".join(f"{i + 1}. {m}" for i, m in enumerate(metrics))
         result = await agent.ainvoke(
-            {"messages": [HumanMessage(content=state["question"])]},
+            {"messages": [HumanMessage(content=metrics_msg)]},
         )
         last_msg = result["messages"][-1]
         sql_result = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
@@ -138,10 +177,16 @@ def make_sql_agent_node(llm: ChatOpenAI, sql_tools: list):
 def make_sql_answer_node(llm: ChatOpenAI):
     async def sql_answer_node(state: ChatState) -> dict:
         prompt = build_sql_answer_prompt(state.get("classes_info"))
+        metrics = state.get("metrics", [])
+        metrics_text = "\n".join(f"{i + 1}. {m}" for i, m in enumerate(metrics))
         messages = [
             SystemMessage(content=prompt),
             HumanMessage(
-                content=f"Question: {state['question']}\nData: {state['sql_result']}"
+                content=(
+                    f"User question: {state['question']}\n\n"
+                    f"Planned metrics:\n{metrics_text}\n\n"
+                    f"Raw database results:\n{state['sql_result']}"
+                )
             ),
         ]
         response = await llm.ainvoke(messages)

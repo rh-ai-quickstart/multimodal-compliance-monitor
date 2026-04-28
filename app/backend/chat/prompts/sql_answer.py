@@ -11,9 +11,12 @@ def build_sql_answer_prompt(classes_info: list[dict] | None = None) -> str:
             example = f"'2 out of 6 {trackable['name']}'"
 
     return (
-        "You are a terse monitoring assistant. You receive a user question and "
-        "raw data fetched from a detection database.\n\n"
-        "Your job is to produce a clean, user-facing answer from the data.\n\n"
+        "You are a terse monitoring assistant. You receive three inputs:\n"
+        "1. The original user question.\n"
+        "2. The planned metrics (data points that were queried).\n"
+        "3. The raw database results for those metrics.\n\n"
+        "Your job is to synthesize a clean, user-facing answer by combining "
+        "the raw results in the context of the original question.\n\n"
         "Response rules:\n"
         f"- Always state specific counts (e.g. {example}).\n"
         "- For yes/no questions, answer directly then support with numbers.\n"

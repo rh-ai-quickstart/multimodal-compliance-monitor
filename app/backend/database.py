@@ -652,13 +652,13 @@ def get_schema_description() -> str:
     Return the database schema description for the LLM prompt.
     Used by the Text-to-SQL chatbot to understand the data model.
     """
-    return """
+    return """\
 DATABASE SCHEMA:
 
 Table: app_config
-- id (SERIAL, PRIMARY KEY): Config ID
-- model_url (VARCHAR): OVMS gRPC/REST host (endpoint URL)
-- model_name (VARCHAR): OVMS served model id (must match model name in OVMS config)
+- id (SERIAL PK)
+- model_url (VARCHAR): serving endpoint URL
+- model_name (VARCHAR): served model id
 - video_source (VARCHAR): Video path or RTSP URL
 - created_at (TIMESTAMP): When config was created
 - Inference input tensor name: backend env MODEL_INPUT_NAME only (not in this table; Runtime defaults to x if unset)
@@ -683,13 +683,4 @@ Table: detection_observations
 - timestamp (TIMESTAMP): When this observation was recorded
 - attributes (JSONB): Flexible attributes. For PPE persons: {"hardhat": true/false, "vest": true/false, "mask": true/false}
 
-NOTES:
-- For PPE: detection_classes_id points to Person. A "violation" means attributes->>'hardhat'='false', etc.
-- Query PPE: (attributes->>'hardhat')::boolean = false for hardhat violations
-- Use COUNT(DISTINCT track_id) to count unique people
-- Use CURRENT_TIMESTAMP for current time, CURRENT_DATE for today
-- Use INTERVAL for date math: CURRENT_DATE - INTERVAL '7 days'
-- Use EXTRACT(DOW FROM timestamp) for day of week (0=Sunday, 6=Saturday)
-- Use DATE_TRUNC('day', timestamp) to group by date
-- Use TO_CHAR(timestamp, 'Day') to get day name
 """

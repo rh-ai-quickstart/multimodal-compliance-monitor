@@ -80,7 +80,7 @@ async def load_tools():
     return wrapped
 
 
-async def load_sql_tool_only():
+async def load_execute_sql_tool() -> StructuredTool:
     """Load only the wrapped ``execute_sql`` tool, dropping all others."""
     all_tools = await load_tools()
     sql_tools = [t for t in all_tools if t.name == "execute_sql"]
@@ -89,4 +89,4 @@ async def load_sql_tool_only():
     log.info(
         "Loaded execute_sql tool only (filtered %d other tools)", len(all_tools) - 1
     )
-    return sql_tools
+    return sql_tools[0]
