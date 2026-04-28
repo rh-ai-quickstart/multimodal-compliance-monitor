@@ -353,7 +353,7 @@ class VideoHandler:
                     yield_start = time.perf_counter()
                     yield chunk
                     yield_end = time.perf_counter()
-                    log.info(f"Yield took {(yield_end - yield_start) * 1000:.2f} ms")
+                    log.debug(f"Yield took {(yield_end - yield_start) * 1000:.2f} ms")
                 except (BrokenPipeError, ConnectionResetError, OSError) as e:
                     log.warning(f"Video feed: client disconnected during yield: {e}")
                     break
