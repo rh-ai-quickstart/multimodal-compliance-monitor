@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chat.prompts._utils import pick_example_classes
+from chat.prompts._utils import compact_classes, pick_example_class
 from database import get_schema_description
 from logger import get_logger
 
@@ -12,20 +12,27 @@ SQL GENERATION RULES — read carefully:
 2. Never wrap SQL in markdown fences (```), quotes, or any extra text.
 3. Return exactly ONE statement — no semicolons separating multiple statements.
 4. Output ONLY the raw SQL, nothing else.
+5. Make sure majority vote is used for each track_id.
 """
 
 _SQL_GENERATION_NOTE = """\
 NOTES:
 - Each track has many noisy observations. Classify a track by majority vote, not by any single observation.
 - Use GROUP BY track_id with COUNT(*) FILTER (WHERE (attributes->>'attr')::boolean = false/true) to tally per-track.
-- Use HAVING to keep only tracks where false_count > true_count (= violation), or wrap in a subquery and COUNT(*).
-- Observations where the attribute key is absent are naturally ignored by FILTER (NULL fails the boolean cast).
+- Use HAVING with majority vote in BOTH directions (false > true AND true > false) — never shortcut either with COUNT(DISTINCT) + a WHERE filter.
+- Observations where the attribute key is absent are naturally ignored by FILTER (NULL fails the boolean cast). Use the exact JSONB key from the schema — never infer or rename keys from class display names.
 - Use COUNT(DISTINCT track_id) to count unique tracked objects
 - Use CURRENT_TIMESTAMP for current time, CURRENT_DATE for today
 - Use INTERVAL for date math: CURRENT_DATE - INTERVAL '7 days'
 - Use EXTRACT(DOW FROM timestamp) for day of week (0=Sunday, 6=Saturday)
 - Use DATE_TRUNC('day', timestamp) to group by date
 - Use TO_CHAR(timestamp, 'Day') to get day name
+"""
+
+
+_SQL_GENERATION_MAJORITY_VOTE_NOTE = """\
+NOTES:
+- Make sure majority vote is used for each track_id.
 """
 
 
@@ -37,7 +44,7 @@ def _build_query_patterns(
     if not classes_info or app_config_id is None:
         return ""
 
-    trackable, non_trackable = pick_example_classes(classes_info)
+    trackable, non_trackable = pick_example_class(classes_info)
     if not trackable:
         return ""
 
@@ -159,20 +166,19 @@ def build_sql_generator_prompt(
             f"\nIMPORTANT: The user is viewing app_config id={app_config_id}. "
             f"ALL SQL queries MUST join or filter through "
             f"Never query data from other configs.\n"
-            f"When counting violators via majority-vote (GROUP BY + HAVING), "
-            f"ALWAYS wrap the grouped query in a subquery and use COUNT(*) "
-            f"on the outside. Never combine COUNT(DISTINCT track_id) with "
-            f"GROUP BY track_id — that returns 1 per row, not a total.\n"
+            f"When counting tracks via majority-vote (GROUP BY + HAVING), "
+            f"ALWAYS wrap the grouped query in a subquery: SELECT COUNT(*) FROM (...) sub. "
+            f"Never reference inner aliases in the outer SELECT. "
+            f"In HAVING, always compare true_count vs false_count — never use > 0 or = 0 thresholds.\n"
         )
-        if classes_info:
-            class_lines = ", ".join(
-                f"{c['name']} (trackable={c['trackable']})" for c in classes_info
-            )
-            constraint += f"Detection classes for this config: {class_lines}\n"
+        compact = compact_classes(classes_info)
+        if compact:
+            constraint += f"Detection classes for this config:\n{compact}\n"
         parts.append(constraint)
 
         parts.append(_build_query_patterns(classes_info, app_config_id))
     else:
         logger.warning("No app_config_id provided for SQL generator")
 
+    parts.append(_SQL_GENERATION_MAJORITY_VOTE_NOTE)
     return "".join(parts)

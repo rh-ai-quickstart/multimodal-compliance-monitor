@@ -21,6 +21,7 @@ from chat.state import ChatState
 from logger import get_logger
 from tools.mcp_tools import current_app_config_id, load_execute_sql_tool
 from langchain_core.tools import StructuredTool
+from openinference.instrumentation import using_session
 
 log = get_logger(__name__)
 
@@ -137,12 +138,15 @@ class LLMChat:
         token = current_app_config_id.set(app_config_id)
         try:
             inp = self._build_input(question, context, app_config_id, classes_info)
-            response = asyncio.run(
-                self._app.ainvoke(
-                    inp,
-                    config={"configurable": {"thread_id": self._thread_id(session_id)}},
+            with using_session(session_id):
+                response = asyncio.run(
+                    self._app.ainvoke(
+                        inp,
+                        config={
+                            "configurable": {"thread_id": self._thread_id(session_id)}
+                        },
+                    )
                 )
-            )
             return response["messages"][-1].content
         finally:
             current_app_config_id.reset(token)
@@ -178,8 +182,9 @@ class LLMChat:
 
         token = current_app_config_id.set(app_config_id)
         try:
-            for chunk in asyncio.run(_astream()):
-                yield chunk
+            with using_session(session_id):
+                for chunk in asyncio.run(_astream()):
+                    yield chunk
         finally:
             current_app_config_id.reset(token)
 

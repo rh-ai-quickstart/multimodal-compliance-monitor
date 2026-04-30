@@ -10,7 +10,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from chat.prompts import (
-    CLARIFIER_PROMPT,
+    build_clarifier_prompt,
     build_context_answer_prompt,
     build_router_prompt,
     build_sql_answer_prompt,
@@ -48,13 +48,15 @@ def make_clarifier_node(llm: ChatOpenAI):
     async def clarifier_node(state: ChatState) -> dict:
         history = state.get("messages", [])
         raw_question = state["question"]
+        classes_info = state.get("classes_info")
 
         if not history or len(history) <= 1:
             log.info("Clarifier: no history, passing question through unchanged")
             return {"question": raw_question}
 
+        prompt = build_clarifier_prompt(classes_info)
         messages = [
-            SystemMessage(content=CLARIFIER_PROMPT),
+            SystemMessage(content=prompt),
             *history,
             HumanMessage(content=raw_question),
         ]
@@ -95,7 +97,7 @@ def make_context_answer_node(llm: ChatOpenAI):
         messages = [
             SystemMessage(content=prompt),
             SystemMessage(content=f"The user sees right now:\n{state['context']}"),
-            HumanMessage(content=state["question"]),
+            HumanMessage(content=f"User question: {state['question']}"),
         ]
         response = await llm.ainvoke(messages)
         return {"messages": [response]}

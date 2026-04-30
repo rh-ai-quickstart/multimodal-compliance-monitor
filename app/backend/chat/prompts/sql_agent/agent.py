@@ -22,7 +22,7 @@ def build_sql_agent_prompt(
     """
     parts = [
         "You are a data-fetching orchestrator for a detection-monitoring database.\n"
-        "You have one tool:\n"
+        "You have one tool which you MUST to use for each metric:\n"
         "- query_metric: generates a SQL query for a metric and executes it, returning the result.\n",
         _AGENT_ORCHESTRATION_RULES,
     ]

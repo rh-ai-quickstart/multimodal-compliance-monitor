@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chat.prompts._utils import pick_example_classes
+from chat.prompts._utils import pick_example_class
 
 
 def build_router_prompt(classes_info: list[dict] | None = None) -> str:
@@ -8,7 +8,7 @@ def build_router_prompt(classes_info: list[dict] | None = None) -> str:
     sql_examples = "'Show detection counts for the past week'"
 
     if classes_info:
-        trackable, non_trackable = pick_example_classes(classes_info)
+        trackable, non_trackable = pick_example_class(classes_info)
         if trackable:
             context_examples = f"'How many {trackable['name']} on screen?'"
         if non_trackable:

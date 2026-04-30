@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chat.prompts._utils import pick_example_classes
+from chat.prompts._utils import english_join, pick_example_classes
 
 
 def build_sql_planner_prompt(classes_info: list[dict] | None = None) -> str:
@@ -11,21 +11,61 @@ def build_sql_planner_prompt(classes_info: list[dict] | None = None) -> str:
         "to fully answer the question.\n\n"
         "Each metric should be a short, specific data point description.\n\n"
     ]
-
     if classes_info:
-        trackable, non_trackable = pick_example_classes(classes_info)
+        trackables, non_trackables = pick_example_classes(classes_info, 1, 4)
 
         parts.append("Examples:\n")
-        if trackable and non_trackable:
+        if trackables and non_trackables:
+            trackable = trackables[0]["name"]
+            nt_names = [nt["name"] for nt in non_trackables]
+
+            with_items = [f"a {n}" for n in nt_names[:-1]]
+            without = nt_names[-1]
+
+            if len(nt_names) >= 2:
+                with_str = english_join(with_items)
+                parts.append(
+                    f'- Question: "In the last 2 hours, how many {trackable} were detected '
+                    f'with {with_str} but without a {without}?"\n'
+                    f'  Metrics: ["unique {trackable} with {with_str} '
+                    f'but without a {without} in the last 2 hours"]\n\n'
+                )
+            else:
+                parts.append(
+                    f'- Question: "In the last 2 hours, how many {trackable} were detected '
+                    f'without a {without}?"\n'
+                    f'  Metrics: ["unique {trackable} without a {without} '
+                    f'in the last 2 hours"]\n\n'
+                )
+
+            with_items = english_join([f"a {n}" for n in nt_names])
             parts.append(
-                f'- Question: "What\'s the {non_trackable["name"]} rate today?"\n'
-                f'  Metrics: ["total unique {trackable["name"]} detected today", '
-                f'"unique {trackable["name"]} without {non_trackable["name"]} today"]\n\n'
+                f'- Question: "how many {trackable} have {with_items} in the last 2 hours"\n'
+                f'  Metrics: ["unique {trackable} with {with_items} '
+                f'in the last 2 hours", unique {trackable} count in the last 2 hours"]\n\n'
             )
-        if trackable:
+
             parts.append(
-                f'- Question: "How many {trackable["name"]} were detected in the last hour?"\n'
-                f'  Metrics: ["unique {trackable["name"]} count in the last hour"]\n\n'
+                f'- Question: "How many {trackable} were detected in the last 4 minutes?"\n'
+                f'  Metrics: ["unique {trackable} count in the last 4 minutes"]\n\n'
+            )
+        elif trackables:
+            trackable = trackables[0]["name"]
+            parts.append(
+                f'- Question: "How many {trackable} were detected in the last hour?"\n'
+                f'  Metrics: ["unique {trackable} count in the last hour"]\n\n'
+            )
+        elif non_trackables:
+            nt = non_trackables[0]["name"]
+            nt_names = [nt["name"] for nt in non_trackables]
+            parts.append(
+                f'- Question: "How many {nt} were detected in the last hour?"\n'
+                f'  Metrics: ["unique {nt} count in the last hour"]\n\n'
+            )
+            with_items = english_join([f"a {n}" for n in nt_names])
+            parts.append(
+                f'- Question: "How many {with_items} in the last hour?"\n'
+                f'  Metrics: ["unique {with_items} count in the last hour"]\n\n'
             )
     else:
         parts.append(

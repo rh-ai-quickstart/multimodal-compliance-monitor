@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from chat.prompts._utils import pick_example_classes
+from chat.prompts._utils import pick_example_class
 
 
 def build_sql_answer_prompt(classes_info: list[dict] | None = None) -> str:
     example = "'2 out of 6 detected objects'"
     if classes_info:
-        trackable, _ = pick_example_classes(classes_info)
+        trackable, _ = pick_example_class(classes_info)
         if trackable:
             example = f"'2 out of 6 {trackable['name']}'"
 
