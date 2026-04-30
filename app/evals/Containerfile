@@ -11,6 +11,8 @@ RUN uv sync --locked
 
 COPY . .
 
+RUN mkdir -p /evals/.deepeval && chmod 777 /evals/.deepeval
+
 USER 1001
 
 ENV PATH="/evals/.venv/bin:$PATH"

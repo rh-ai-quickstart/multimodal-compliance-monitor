@@ -1,134 +1,134 @@
 [
   {
     "id": "full_compliance__people_on_screen",
-    "question": "Are all the people on the screen compliant with safety requirements?",
+    "question": "Are all the people compliant with safety requirements?",
     "description": "Hardhat: 2, NO-Hardhat: 2, NO-Mask: 4, NO-Safety Vest: 3, Person: 4",
-    "golden_answer": "No, not all people on the screen are compliant. There are 4 people on screen. 2 are wearing hardhats (2 without), 1 is wearing a safety vest (3 without), and none are wearing masks (4 without)."
+    "golden_answer": "No, not all people are compliant. There are 4 people. 2 are wearing hardhats (2 without), 1 is wearing a safety vest (3 without), and none are wearing masks (4 without)."
   },
   {
     "id": "full_compliance__vest_count",
-    "question": "How many workers on screen are wearing their safety vests?",
+    "question": "How many workers are wearing their safety vests?",
     "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
-    "golden_answer": "0 workers are wearing safety vests. There is 1 worker on screen and they are not wearing a safety vest."
+    "golden_answer": "0 workers are wearing safety vests. There is 1 worker and they are not wearing a safety vest."
   },
   {
     "id": "zero_compliance__people_on_screen",
-    "question": "Are the workers currently on screen wearing all required safety equipment?",
+    "question": "Are the workers currently wearing all required safety equipment?",
     "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
-    "golden_answer": "No, the worker is not wearing all required safety equipment. There is 1 person on screen who is missing a hardhat and a safety vest."
+    "golden_answer": "No, the worker is not wearing all required safety equipment. There is 1 person who is missing a hardhat and a safety vest."
   },
   {
     "id": "zero_compliance__vest_count",
-    "question": "Are any of the workers on screen wearing safety vests?",
+    "question": "Are any of the workers wearing safety vests?",
     "description": "NO-Hardhat: 2, NO-Mask: 2, NO-Safety Vest: 2, Person: 2",
-    "golden_answer": "No, none of the 2 workers on screen are wearing safety vests."
+    "golden_answer": "No, none of the 2 workers are wearing safety vests."
   },
   {
     "id": "mixed_compliance__people_on_screen",
-    "question": "Are all the people on the screen following safety compliance rules?",
+    "question": "Are all the people following safety compliance rules?",
     "description": "Hardhat: 1, Mask: 1, NO-Hardhat: 2, NO-Mask: 1, NO-Safety Vest: 2, Person: 3",
-    "golden_answer": "No, not all people are following safety compliance rules. There are 3 people on screen. 1 is wearing a hardhat (2 without), 1 is wearing a safety vest (2 without), and 1 is wearing a mask (1 without)."
+    "golden_answer": "No, not all people are following safety compliance rules. There are 3 people. 1 is wearing a hardhat (2 without), 1 is wearing a safety vest (2 without), and 1 is wearing a mask (1 without)."
   },
   {
     "id": "mixed_compliance__vest_count",
-    "question": "How many people on screen are wearing a safety vest?",
+    "question": "How many people are wearing a safety vest?",
     "description": "Hardhat: 2, Mask: 2, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
-    "golden_answer": "2 out of 6 people on screen are wearing a safety vest. 4 workers are not wearing safety vests."
+    "golden_answer": "2 out of 6 people are wearing a safety vest. 4 workers are not wearing safety vests."
   },
   {
     "id": "single_worker_compliant__people_on_screen",
-    "question": "Is the worker on screen fully compliant with PPE requirements?",
+    "question": "Is the worker fully compliant with PPE requirements?",
     "description": "Detected: Hardhat: 2, Mask: 1, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
-    "golden_answer": "No, not all workers on screen are fully compliant. There are 6 people on screen. 2 are wearing hardhats (4 without), 2 are wearing safety vests (4 without), and 1 is wearing a mask (4 without)."
+    "golden_answer": "No, not all workers are fully compliant. There are 6 people. 2 are wearing hardhats (4 without), 2 are wearing safety vests (4 without), and 1 is wearing a mask (4 without)."
   },
   {
     "id": "single_worker_compliant__vest_count",
-    "question": "Is the worker on screen wearing a safety vest?",
+    "question": "Is the worker wearing a safety vest?",
     "description": "Hardhat: 2, NO-Hardhat: 2, NO-Mask: 4, NO-Safety Vest: 3, Person: 4",
-    "golden_answer": "1 out of 4 workers on screen is wearing a safety vest. 3 workers are not wearing safety vests."
+    "golden_answer": "1 out of 4 workers is wearing a safety vest. 3 workers are not wearing safety vests."
   },
   {
     "id": "single_worker_violating__people_on_screen",
-    "question": "Is the person on screen compliant with all safety regulations?",
+    "question": "Is the person compliant with all safety regulations?",
     "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
-    "golden_answer": "No, the person on screen is not fully compliant. The worker is wearing a mask but is missing a hardhat and a safety vest."
+    "golden_answer": "No, the person is not fully compliant. The worker is wearing a mask but is missing a hardhat and a safety vest."
   },
   {
     "id": "single_worker_violating__vest_count",
-    "question": "Does the worker on screen have a safety vest on?",
+    "question": "Does the worker have a safety vest on?",
     "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
-    "golden_answer": "No, the worker on screen does not have a safety vest on."
+    "golden_answer": "No, the worker does not have a safety vest on."
   },
   {
     "id": "crowded_mostly_compliant__people_on_screen",
-    "question": "Are all the workers visible on screen compliant with safety requirements?",
+    "question": "Are all the workers compliant with safety requirements?",
     "description": "NO-Hardhat: 2, NO-Mask: 2, NO-Safety Vest: 2, Person: 2",
-    "golden_answer": "No, none of the 2 workers on screen are compliant. Neither worker is wearing a hardhat, mask, or safety vest."
+    "golden_answer": "No, none of the 2 workers are compliant. Neither worker is wearing a hardhat, mask, or safety vest."
   },
   {
     "id": "crowded_mostly_compliant__vest_count",
-    "question": "How many of the workers on screen have their safety vests on?",
+    "question": "How many of the workers have their safety vests on?",
     "description": "Hardhat: 1, Mask: 1, NO-Hardhat: 2, NO-Mask: 1, NO-Safety Vest: 2, Person: 3",
-    "golden_answer": "1 out of 3 workers on screen is wearing a safety vest. 2 workers are not wearing safety vests."
+    "golden_answer": "1 out of 3 workers is wearing a safety vest. 2 workers are not wearing safety vests."
   },
   {
     "id": "empty_scene__people_on_screen",
-    "question": "Is anyone on the screen, and are they compliant with safety requirements?",
+    "question": "Are there any workers, and are they compliant with safety requirements?",
     "description": "Hardhat: 2, Mask: 2, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
-    "golden_answer": "Yes, there are 6 people on the screen, but not all are compliant. 2 are wearing hardhats (4 without), 2 are wearing safety vests (4 without), and 2 are wearing masks (4 without)."
+    "golden_answer": "Yes, there are 6 people, but not all are compliant. 2 are wearing hardhats (4 without), 2 are wearing safety vests (4 without), and 2 are wearing masks (4 without)."
   },
   {
     "id": "empty_scene__vest_count",
-    "question": "Are any workers on screen wearing safety vests?",
+    "question": "Are any workers wearing safety vests?",
     "description": "Detected: Hardhat: 2, Mask: 1, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
-    "golden_answer": "Yes, 2 out of 6 workers on screen are wearing safety vests. 4 workers are not wearing safety vests."
+    "golden_answer": "Yes, 2 out of 6 workers are wearing safety vests. 4 workers are not wearing safety vests."
   },
   {
     "id": "hardhats_missing__people_on_screen",
-    "question": "Are the people on screen compliant with hardhat safety requirements?",
+    "question": "Are the people compliant with hardhat safety requirements?",
     "description": "Hardhat: 2, NO-Hardhat: 2, NO-Mask: 4, NO-Safety Vest: 3, Person: 4",
-    "golden_answer": "No, not all people are compliant with hardhat requirements. There are 4 people on screen, with 2 wearing hardhats and 2 detected without."
+    "golden_answer": "No, not all people are compliant with hardhat requirements. There are 4 people, with 2 wearing hardhats and 2 detected without."
   },
   {
     "id": "hardhats_missing__vest_count",
-    "question": "How many workers on screen currently have safety vests on?",
+    "question": "How many workers currently have safety vests on?",
     "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
-    "golden_answer": "0 workers currently have safety vests on. There is 1 worker on screen who is not wearing a safety vest."
+    "golden_answer": "0 workers currently have safety vests on. There is 1 worker who is not wearing a safety vest."
   },
   {
     "id": "vests_missing__people_on_screen",
-    "question": "Are the workers on screen compliant with safety vest requirements?",
+    "question": "Are the workers compliant with safety vest requirements?",
     "description": "Mask: 1, NO-Hardhat: 1, NO-Safety Vest: 1, Person: 1",
-    "golden_answer": "No, the worker on screen is not compliant with safety vest requirements. There is 1 person on screen who is not wearing a safety vest."
+    "golden_answer": "No, the worker is not compliant with safety vest requirements. There is 1 person who is not wearing a safety vest."
   },
   {
     "id": "vests_missing__vest_count",
-    "question": "How many workers on screen are wearing safety vests?",
+    "question": "How many workers are wearing safety vests?",
     "description": "NO-Hardhat: 2, NO-Mask: 2, NO-Safety Vest: 2, Person: 2",
-    "golden_answer": "0 workers on screen are wearing safety vests. Neither of the 2 workers is wearing a safety vest."
+    "golden_answer": "0 workers are wearing safety vests. Neither of the 2 workers is wearing a safety vest."
   },
   {
     "id": "masks_only_issue__people_on_screen",
-    "question": "Are all individuals on screen compliant with mask safety requirements?",
+    "question": "Are all individuals compliant with mask safety requirements?",
     "description": "Hardhat: 1, Mask: 1, NO-Hardhat: 2, NO-Mask: 1, NO-Safety Vest: 2, Person: 3",
-    "golden_answer": "No, not all individuals are compliant with mask requirements. There are 3 people on screen, with 1 wearing a mask and 1 detected without."
+    "golden_answer": "No, not all individuals are compliant with mask requirements. There are 3 people, with 1 wearing a mask and 1 detected without."
   },
   {
     "id": "masks_only_issue__vest_count",
-    "question": "What is the safety vest compliance count on screen?",
+    "question": "What is the safety vest compliance count?",
     "description": "Hardhat: 2, Mask: 2, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
-    "golden_answer": "2 out of 6 workers on screen are wearing safety vests. 4 workers are not compliant with safety vest requirements."
+    "golden_answer": "2 out of 6 workers are wearing safety vests. 4 workers are not compliant with safety vest requirements."
   },
   {
     "id": "near_perfect__people_on_screen",
-    "question": "Are the people on screen fully compliant with all safety requirements?",
+    "question": "Are the people fully compliant with all safety requirements?",
     "description": "Detected: Hardhat: 2, Mask: 1, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
-    "golden_answer": "No, the people on screen are not fully compliant. There are 6 people on screen. 2 are wearing hardhats (4 without), 2 are wearing safety vests (4 without), and 1 is wearing a mask (4 without)."
+    "golden_answer": "No, the people are not fully compliant. There are 6 people. 2 are wearing hardhats (4 without), 2 are wearing safety vests (4 without), and 1 is wearing a mask (4 without)."
   },
   {
     "id": "near_perfect__vest_count",
-    "question": "How many people on screen are compliant with safety vest requirements?",
+    "question": "How many people are compliant with safety vest requirements?",
     "description": "NO-Hardhat: 2, NO-Mask: 2, NO-Safety Vest: 2, Person: 2",
-    "golden_answer": "0 people on screen are compliant with safety vest requirements. Neither of the 2 workers is wearing a safety vest."
+    "golden_answer": "0 people are compliant with safety vest requirements. Neither of the 2 workers is wearing a safety vest."
   }
 ]

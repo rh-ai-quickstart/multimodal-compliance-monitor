@@ -135,12 +135,47 @@ def save_snapshot(path: Path = SNAPSHOT_FILE) -> int:
     return _dump_tables_to_file(path)
 
 
+def _shift_timestamps_to_now() -> None:
+    """Shift all seed timestamps so the newest observation is NOW() - 1 second.
+
+    The seed data spans ~2 minutes. After shifting, all data falls within
+    the last ~2:13 which keeps every time-window query (last 3 min etc.)
+    valid regardless of when the eval actually runs.
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE detection_observations
+            SET "timestamp" = "timestamp" + (
+                NOW() - INTERVAL '1 second'
+                - (SELECT MAX("timestamp") FROM detection_observations)
+            )
+        """)
+        cur.execute("""
+            UPDATE detection_tracks
+            SET first_seen = first_seen + (
+                NOW() - INTERVAL '1 second'
+                - (SELECT MAX(last_seen) FROM detection_tracks)
+            ),
+            last_seen = last_seen + (
+                NOW() - INTERVAL '1 second'
+                - (SELECT MAX(last_seen) FROM detection_tracks)
+            )
+        """)
+        conn.commit()
+
+
 def load_seed(sql_path: Path) -> dict[str, int]:
     """Truncate the 4 eval tables and load seed data from *sql_path*.
 
+    After loading, shifts all timestamps to be relative to NOW() so that
+    time-based queries work regardless of when the eval runs.
+
     Returns per-table row counts.
     """
-    return _load_sql_file(sql_path)
+    counts = _load_sql_file(sql_path)
+    _shift_timestamps_to_now()
+    return counts
 
 
 def restore_snapshot(path: Path = SNAPSHOT_FILE) -> dict[str, int]:

@@ -1,12 +1,13 @@
 """Standalone evaluation script for the /api/chat endpoint.
 
-Loads eval_dataset.json for the selected dataset, calls the running backend's
-chat REST API for each entry, and uses DeepEval's GEval (Correctness) metric
-with VLLMJudge to score the responses.
+Auto-discovers all ``*.json`` experiment files inside
+``datasets/<EVAL_DATASET>/``, calls the running backend's chat REST API for
+each entry, and uses DeepEval's GEval (Correctness) metric with VLLMJudge to
+score the responses.
 
 Before running, the live database is snapshotted to a volume-backed file.
-Eval seed data is loaded, eval runs, and the live data is restored in a
-``finally`` block (even on error).
+Eval seed data is loaded, all experiments run, and the live data is restored
+in a ``finally`` block (even on error).
 
 Usage::
 
@@ -22,6 +23,7 @@ import json
 import os
 import sys
 import urllib.request
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -29,6 +31,7 @@ from deepeval import evaluate
 from deepeval.evaluate import AsyncConfig, DisplayConfig
 from deepeval.metrics import GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
+from deepeval.metrics.g_eval import Rubric
 
 from judge_model import VLLMJudge
 from load_seed import save_snapshot, load_seed, restore_snapshot
@@ -38,7 +41,7 @@ CHAT_ENDPOINT = f"{BACKEND_URL}/api/chat"
 THRESHOLD = 0.5
 
 EVAL_DATASET = os.getenv("EVAL_DATASET", "ppe")
-DATASET_PATH = Path(__file__).parent / "datasets" / EVAL_DATASET / "eval_dataset.json"
+DATASETS_DIR = Path(__file__).parent / "datasets" / EVAL_DATASET
 SEED_SQL_PATH = Path(__file__).parent / "db_seed_data.sql"
 PREDS_DIR = Path(__file__).parent / "preds" / EVAL_DATASET
 
@@ -50,15 +53,29 @@ DATASET_APP_CONFIG_ID: dict[str, int] = {
 APP_CONFIG_ID = DATASET_APP_CONFIG_ID.get(EVAL_DATASET)
 
 
-def load_dataset() -> list[dict]:
-    if not DATASET_PATH.exists():
-        print(f"ERROR: Dataset not found: {DATASET_PATH}", file=sys.stderr)
+def discover_experiments() -> list[tuple[str, Path]]:
+    """Return sorted ``(experiment_name, path)`` pairs for every JSON file in
+    the dataset directory."""
+    if not DATASETS_DIR.is_dir():
+        available = ", ".join(
+            p.name for p in (Path(__file__).parent / "datasets").iterdir() if p.is_dir()
+        )
+        print(f"ERROR: Dataset directory not found: {DATASETS_DIR}", file=sys.stderr)
+        print(f"Available datasets: {available}", file=sys.stderr)
+        sys.exit(1)
+
+    experiments = sorted((p.stem, p) for p in DATASETS_DIR.glob("*.json"))
+    if not experiments:
         print(
-            f"Available datasets: {', '.join(p.name for p in (Path(__file__).parent / 'datasets').iterdir() if p.is_dir())}",
+            f"ERROR: No JSON experiment files in {DATASETS_DIR}",
             file=sys.stderr,
         )
         sys.exit(1)
-    with open(DATASET_PATH) as f:
+    return experiments
+
+
+def load_dataset(path: Path) -> list[dict]:
+    with open(path) as f:
         return json.load(f)
 
 
@@ -81,39 +98,61 @@ def call_chat(question: str, description: str, session_id: str) -> str:
         return json.loads(resp.read())["answer"]
 
 
-async def _fetch_one(entry: dict) -> tuple[dict, str | None, str | None]:
+async def _fetch_one(
+    entry: dict, eval_run_id: str
+) -> tuple[dict, str | None, str | None]:
     """Return (entry, actual_output, error_str)."""
     try:
         output = await asyncio.to_thread(
             call_chat,
             entry["question"],
             entry["description"],
-            session_id=entry["id"],
+            session_id=f"{eval_run_id}_{entry['id']}",
         )
         return entry, output, None
     except Exception as exc:
         return entry, None, str(exc)
 
 
-async def _fetch_all(dataset: list[dict]) -> list[tuple[dict, str | None, str | None]]:
-    tasks = [_fetch_one(entry) for entry in dataset]
+async def _fetch_all(
+    dataset: list[dict], eval_run_id: str
+) -> list[tuple[dict, str | None, str | None]]:
+    tasks = [_fetch_one(entry, eval_run_id) for entry in dataset]
     return await asyncio.gather(*tasks)
 
 
-def run() -> None:
-    dataset = load_dataset()
-    judge = VLLMJudge()
+def run_experiment(
+    experiment_name: str,
+    dataset_path: Path,
+    judge: VLLMJudge,
+    eval_run_id: str,
+) -> list[dict]:
+    """Run a single experiment file and return its result dicts."""
+    dataset = load_dataset(dataset_path)
 
     correctness = GEval(
         name="Correctness",
-        criteria=(
-            "The actual output must directly answer the input question and "
-            "convey the same factual information as the expected output. "
-            "Most important score factor is the actual output asnwering the main question of the input question same as the expected output. "
-            "All numerical values and yes/no conclusions must match. "
-            "Minor wording or phrasing differences are acceptable "
-            "as long as the facts and overall conclusion are equivalent."
-        ),
+        # criteria="Determine whether the actual output correctly answers the input question with the same numerical facts as the expected output.",
+        evaluation_steps=[
+            "Check that the actual output directly answers the core question in the input.",
+            "Verify all numerical values and yes/no conclusions match between the actual output and the expected output.",
+            "Penalize contradicted or omitted key facts; extra detail or phrasing differences are acceptable.",
+        ],
+        rubric=[
+            Rubric(
+                score_range=(0, 2),
+                expected_outcome="Numerical values not matching between the actual output and the expected output. Or yes/no conclusions not matching between the actual output and the expected output.",
+            ),
+            Rubric(
+                score_range=(5, 7),
+                expected_outcome="numberical values matching between the actual output and the expected output. there is some additional information.",
+            ),
+            Rubric(
+                score_range=(8, 9),
+                expected_outcome="Correct but missing minor details.",
+            ),
+            Rubric(score_range=(10, 10), expected_outcome="100% correct."),
+        ],
         evaluation_params=[
             LLMTestCaseParams.INPUT,
             LLMTestCaseParams.ACTUAL_OUTPUT,
@@ -124,7 +163,7 @@ def run() -> None:
     )
 
     print(f"Sending {len(dataset)} chat requests concurrently ...")
-    fetch_results = asyncio.run(_fetch_all(dataset))
+    fetch_results = asyncio.run(_fetch_all(dataset, eval_run_id))
 
     results: list[dict] = []
     test_cases: list[tuple[dict, LLMTestCase, str]] = []
@@ -147,6 +186,7 @@ def run() -> None:
             input=entry["question"],
             actual_output=actual_output,
             expected_output=entry["golden_answer"],
+            additional_metadata={"id": entry["id"]},
         )
         test_cases.append((entry, tc, actual_output))
 
@@ -158,9 +198,11 @@ def run() -> None:
             async_config=AsyncConfig(max_concurrent=10, throttle_value=0),
             display_config=DisplayConfig(print_results=False),
         )
-        for (entry, _tc, actual_output), test_result in zip(
-            test_cases, eval_result.test_results
-        ):
+        result_by_id = {
+            tr.additional_metadata["id"]: tr for tr in eval_result.test_results
+        }
+        for entry, _tc, actual_output in test_cases:
+            test_result = result_by_id[entry["id"]]
             metric = test_result.metrics_data[0]
             score = metric.score if metric.score is not None else 0.0
             passed = score >= THRESHOLD
@@ -177,17 +219,52 @@ def run() -> None:
                 }
             )
 
-    print_summary(results)
-    save_results(results)
-    sys.exit(0 if all(r["passed"] for r in results) else 1)
+    return results
 
 
-def print_summary(results: list[dict]) -> None:
+def run() -> None:
+    eval_run_id = f"eval-{uuid.uuid4().hex[:8]}"
+    print(f"==> Eval run ID:  {eval_run_id}")
+
+    experiments = discover_experiments()
+    judge = VLLMJudge()
+    all_results: list[dict] = []
+    all_passed = True
+    now = datetime.now()
+
+    for experiment_name, dataset_path in experiments:
+        print()
+        print(f"{'=' * 72}")
+        print(f"  Experiment: {experiment_name}  ({dataset_path.name})")
+        print(f"{'=' * 72}")
+
+        results = run_experiment(experiment_name, dataset_path, judge, eval_run_id)
+        print_summary(experiment_name, results)
+        save_results(experiment_name, results, now)
+        all_results.extend(results)
+        if not all(r["passed"] for r in results):
+            all_passed = False
+
+    save_summary(all_results, now)
+
+    if len(experiments) > 1:
+        print()
+        print(f"{'#' * 72}")
+        print("  OVERALL SUMMARY (all experiments)")
+        print(f"{'#' * 72}")
+        print_summary("all", all_results)
+
+    sys.exit(0 if all_passed else 1)
+
+
+def print_summary(experiment_name: str, results: list[dict]) -> None:
     total = len(results)
     passed = sum(1 for r in results if r["passed"])
     failed = total - passed
 
     print("\n" + "=" * 72)
+    print(f"  [{experiment_name}]  {total} tests | {passed} passed | {failed} failed")
+    print("-" * 72)
     print(f"{'ID':<50} {'SCORE':>6}  {'RESULT':>6}")
     print("-" * 72)
     for r in results:
@@ -200,15 +277,15 @@ def print_summary(results: list[dict]) -> None:
     )
 
 
-def save_results(results: list[dict]) -> None:
+def save_results(experiment_name: str, results: list[dict], now: datetime) -> None:
     """Write eval results to a timestamped JSON file in preds/<dataset>/."""
     total = len(results)
     passed = sum(1 for r in results if r["passed"])
     failed = total - passed
 
-    now = datetime.now()
     output = {
         "eval_dataset": EVAL_DATASET,
+        "experiment": experiment_name,
         "timestamp": now.isoformat(timespec="seconds"),
         "threshold": THRESHOLD,
         "model": os.getenv("OPENAI_MODEL", "unknown"),
@@ -219,14 +296,14 @@ def save_results(results: list[dict]) -> None:
         "results": results,
     }
 
-    PREDS_DIR.mkdir(parents=True, exist_ok=True)
-    for parent in [PREDS_DIR] + list(PREDS_DIR.parents):
+    run_dir = PREDS_DIR / now.strftime("%Y-%m-%dT%H-%M-%S")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    for parent in [run_dir] + list(run_dir.parents):
         try:
             parent.chmod(0o777)
         except OSError:
             break
-    filename = f"results_{now.strftime('%Y-%m-%dT%H-%M-%S')}.json"
-    path = PREDS_DIR / filename
+    path = run_dir / f"{experiment_name}.json"
 
     with open(path, "w") as f:
         json.dump(output, f, indent=2, default=str)
@@ -235,10 +312,48 @@ def save_results(results: list[dict]) -> None:
     print(f"\nResults saved to: {path}")
 
 
+def save_summary(all_results: list[dict], now: datetime) -> None:
+    """Write a compact summary JSON with per-ID score and pass/fail."""
+    total = len(all_results)
+    passed = sum(1 for r in all_results if r["passed"])
+    failed = total - passed
+
+    summary = {
+        "timestamp": now.isoformat(timespec="seconds"),
+        "model": os.getenv("OPENAI_MODEL", "unknown"),
+        "threshold": THRESHOLD,
+        "total": total,
+        "passed": passed,
+        "failed": failed,
+        "pass_rate": round(passed / total * 100, 1) if total else 0.0,
+        "results": [
+            {
+                "id": r["id"],
+                "score": r["judge_score"],
+                "result": "pass" if r["passed"] else "fail",
+            }
+            for r in all_results
+        ],
+    }
+
+    run_dir = PREDS_DIR / now.strftime("%Y-%m-%dT%H-%M-%S")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path = run_dir / "summary.json"
+
+    with open(path, "w") as f:
+        json.dump(summary, f, indent=2, default=str)
+    path.chmod(0o666)
+
+    print(f"\nSummary saved to: {path}")
+
+
 if __name__ == "__main__":
+    experiments = discover_experiments()
     print(f"==> Eval dataset: {EVAL_DATASET}")
     print(f"==> Seed SQL:     {SEED_SQL_PATH}")
-    print(f"==> Questions:    {DATASET_PATH}")
+    print(f"==> Experiments:  {len(experiments)} file(s)")
+    for name, path in experiments:
+        print(f"    - {name} ({path.name})")
     print()
 
     print("Saving live database snapshot to volume ... ", end="", flush=True)
@@ -250,7 +365,6 @@ if __name__ == "__main__":
         counts = load_seed(SEED_SQL_PATH)
         summary = ", ".join(f"{t}: {n}" for t, n in counts.items())
         print(f"done ({summary})")
-        print()
         run()
     finally:
         print("\nRestoring live database from snapshot ... ", end="", flush=True)
