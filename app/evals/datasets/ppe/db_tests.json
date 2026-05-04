@@ -135,7 +135,7 @@
     "id": "db_test_23",
     "question": "How many people with masks today",
     "description": "Detected: Hardhat: 2, Mask: 1, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
-    "golden_answer": "6 people wore a mask today"
+    "golden_answer": "11 people wore a mask today"
   },
   {
     "id": "db_test_24",

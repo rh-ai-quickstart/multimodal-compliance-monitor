@@ -2,7 +2,7 @@ import atexit
 import queue
 import threading
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict, deque
 
 import cv2
 
@@ -23,6 +23,9 @@ class VideoHandler:
     (gRPC I/O, cv2, numpy) release the GIL, giving true parallelism.
     """
 
+    DESCRIPTION_BUFFER_SIZE = 50
+    DESCRIPTION_VOTE_WINDOW = 50
+
     def __init__(self, video_source=None):
         """Initialize the demo. video_source can be None; call start_streaming() when user selects a source."""
         self.video_source = video_source
@@ -41,7 +44,12 @@ class VideoHandler:
         self._tracker: TrackerProcess | None = None
         self._active_config_id: int | None = None
         self._class_names_in_order: list[str] = []
-        self._description_buffer: list[str] = []
+        self._description_buffer: deque[str] = deque(
+            maxlen=self.DESCRIPTION_BUFFER_SIZE
+        )
+        self._description_vote_buffer: deque[str] = deque(
+            maxlen=self.DESCRIPTION_VOTE_WINDOW
+        )
 
         self.init_setup()
 
@@ -94,6 +102,7 @@ class VideoHandler:
 
     def start_streaming(self, video_source: str, config_id: int):
         self._description_buffer.clear()
+        self._description_vote_buffer.clear()
         self._stop_event.clear()
         self.video_source = video_source
         self._active_config_id = config_id
@@ -125,6 +134,7 @@ class VideoHandler:
             self._tracker.reset()
 
         self._description_buffer.clear()
+        self._description_vote_buffer.clear()
         self._active_config_id = None
         self._streaming_started = False
         log.info("Streaming stopped")
@@ -161,7 +171,7 @@ class VideoHandler:
                 description += f"{item}: {detections_class_count[item]}, "
         return description.rstrip(", ")
 
-    def _generate_summary(self, descriptions: list) -> str:
+    def _generate_summary(self, descriptions: deque[str]) -> str:
         """Summarize PPE compliance over a list of detection descriptions."""
         total_stats = defaultdict(int)
         frame_count = len(descriptions)
@@ -327,9 +337,8 @@ class VideoHandler:
                 self.latest_description = self._format_detection_description(
                     result.counts, self._class_names_in_order
                 )
+                self._description_vote_buffer.append(self.latest_description)
                 self._description_buffer.append(self.latest_description)
-                if len(self._description_buffer) > 50:
-                    self._description_buffer.pop(0)
                 self.latest_summary = self._generate_summary(self._description_buffer)
 
                 frame = self.draw_detections(result.frame, result.detections)
@@ -361,10 +370,17 @@ class VideoHandler:
         except Exception as e:
             log.exception(f"Video feed: exception in stream loop: {e}")
 
+    def get_majority_description(self) -> str:
+        """Return the most common description among the last K frames."""
+        if not self._description_vote_buffer:
+            return ""
+        counter = Counter(self._description_vote_buffer)
+        return counter.most_common(1)[0][0]
+
     def get_latested_description(self):
-        """Return the most recent description."""
+        """Return the majority-vote description over the last K frames."""
         with self._display_lock:
-            return self.latest_description
+            return self.get_majority_description()
 
     def get_latest_summary(self):
         """Return the most recent summary."""

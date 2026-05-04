@@ -135,7 +135,7 @@ def run_experiment(
         # criteria="Determine whether the actual output correctly answers the input question with the same numerical facts as the expected output.",
         evaluation_steps=[
             "Check that the actual output directly answers the core question in the input.",
-            "Verify all numerical values and yes/no conclusions match between the actual output and the expected output.",
+            "Verify all numerical values and yes/no conclusions match between the actual output and the expected output. Treat 'no'/'none' as 0.",
             "Penalize contradicted or omitted key facts; extra detail or phrasing differences are acceptable.",
         ],
         rubric=[
