@@ -115,7 +115,7 @@ COCO80: tuple[str, ...] = tuple(
 
 
 def _traffic_class_entries() -> list[tuple[int, str, bool, bool]]:
-    track_idx = {2, 5, 7}  # car, bus, truck
+    track_idx = {2, 3, 5, 7}  # car, motorcycle, bus, truck
     return [(i, COCO80[i], i in track_idx, True) for i in range(len(COCO80))]
 
 
@@ -135,7 +135,7 @@ def _ppe_class_entries() -> list[tuple[int, str, bool, bool]]:
         (4, "NO-Safety Vest", False, True),
         (5, "Person", True, True),
         (6, "Safety Cone", False, False),
-        (7, "Safety Vest", False, False),
+        (7, "Safety Vest", False, True),
         (8, "machinery", False, False),
         (9, "vehicle", False, False),
     ]
