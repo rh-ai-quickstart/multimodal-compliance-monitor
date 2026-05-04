@@ -282,7 +282,7 @@ class DbWriterThread:
     A persistent connection is reused across batches and reconnected on failure.
     """
 
-    def __init__(self, max_batch: int = 50, poll_timeout: float = 0.05):
+    def __init__(self, max_batch: int = 10, poll_timeout: float = 0.05):
         self._queue: queue_mod.Queue = queue_mod.Queue(maxsize=5000)
         self._stop = threading.Event()
         self._max_batch = max_batch

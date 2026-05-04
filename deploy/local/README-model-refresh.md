@@ -307,7 +307,7 @@ RTSP / MediaMTX defaults in compose may still target the rooftop PPE sample clip
 
 ### PPE-style `classes` with `include_in_counts`
 
-Multi-class PPE configs keep every model index in **`classes`** for correct name mapping, but set **`include_in_counts`: `false`** on indices that should not drive overlays or summaries (e.g. safety cones, vest, machinery, vehicle). Indices without **`include_in_counts`** default to **`true`**.
+Multi-class PPE configs keep every model index in **`classes`** for correct name mapping, but set **`include_in_counts`: `false`** on indices that should not drive overlays or summaries (e.g. safety cones, machinery, vehicle). Indices without **`include_in_counts`** default to **`true`**.
 
 Only **`classes`** is shown below; use the same top-level fields (**`model_url`**, **`model_name`**, **`video_source`**, etc.) as in the bird example.
 
@@ -321,7 +321,7 @@ Only **`classes`** is shown below; use the same top-level fields (**`model_url`*
     "4": { "name": "NO-Safety Vest", "trackable": false },
     "5": { "name": "Person", "trackable": true },
     "6": { "name": "Safety Cone", "trackable": false, "include_in_counts": false },
-    "7": { "name": "Safety Vest", "trackable": false, "include_in_counts": false },
+    "7": { "name": "Safety Vest", "trackable": false },
     "8": { "name": "machinery", "trackable": false, "include_in_counts": false },
     "9": { "name": "vehicle", "trackable": false, "include_in_counts": false }
   }
