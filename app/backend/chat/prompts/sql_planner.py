@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chat.prompts._utils import english_join, pick_example_classes
+from chat.prompts._utils import compact_classes, english_join, pick_example_classes
 
 
 def build_sql_planner_prompt(classes_info: list[dict] | None = None) -> str:
@@ -10,7 +10,16 @@ def build_sql_planner_prompt(classes_info: list[dict] | None = None) -> str:
         "a list of discrete, measurable metrics that must be fetched from the database "
         "to fully answer the question.\n\n"
         "Each metric should be a short, specific data point description.\n\n"
+        "When the user's question refers to multiple detection classes collectively "
+        "without naming them individually, produce a separate metric for each "
+        "relevant class from the known classes list below. "
+        "If the user names a specific class, produce a metric for that class only. "
+        "If the question only concerns trackable objects, do not expand to "
+        "include non-trackable classes.\n\n"
     ]
+    class_list = compact_classes(classes_info)
+    if class_list:
+        parts.append(f"Known classes:\n{class_list}\n\n")
     if classes_info:
         trackables, non_trackables = pick_example_classes(classes_info, 1, 4)
 

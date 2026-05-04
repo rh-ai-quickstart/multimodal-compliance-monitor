@@ -1,5 +1,28 @@
 from __future__ import annotations
 
+_CLASS_TO_ATTR: dict[str, str] = {
+    "Hardhat": "hardhat",
+    "NO-Hardhat": "hardhat",
+    "Safety Vest": "vest",
+    "NO-Safety Vest": "vest",
+    "Mask": "mask",
+    "NO-Mask": "mask",
+}
+
+
+def attr_keys_for_classes(classes_info: list[dict]) -> list[str]:
+    """Return unique JSONB attribute keys for the non-trackable classes."""
+    seen: set[str] = set()
+    keys: list[str] = []
+    for c in classes_info:
+        if c["trackable"]:
+            continue
+        attr = _CLASS_TO_ATTR.get(c["name"], c["name"].lower())
+        if attr not in seen:
+            seen.add(attr)
+            keys.append(attr)
+    return keys
+
 
 def pick_example_classes(
     classes_info: list[dict],
@@ -55,3 +78,36 @@ def compact_classes(classes_info: list[dict] | str | None) -> str | None:
         f"- {c['name']} ({'trackable' if c.get('trackable') else 'non-trackable'})"
         for c in classes_info
     )
+
+
+def extract_metric_attributes(
+    metric: str,
+    classes_info: list[dict],
+) -> tuple[list[str], list[str]]:
+    """Return trackable class names and non-trackable JSONB attribute keys
+    mentioned in *metric*.
+
+    Trackable names are returned as-is (used in ``dc.name = '...'``).
+    Non-trackable names are mapped to their JSONB attribute keys via
+    ``_CLASS_TO_ATTR`` and deduplicated so that e.g. "Hardhat" and
+    "NO-Hardhat" both resolve to a single ``"hardhat"`` entry.
+
+    Returns ``(trackable_names, non_trackable_attr_keys)``.
+    """
+    metric_lower = metric.lower()
+    trackable = [
+        c["name"]
+        for c in classes_info
+        if c["trackable"] and c["name"].lower() in metric_lower
+    ]
+    seen: set[str] = set()
+    non_trackable: list[str] = []
+    for c in classes_info:
+        if c["trackable"]:
+            continue
+        attr = _CLASS_TO_ATTR.get(c["name"], c["name"].lower())
+        if attr in metric_lower and attr not in seen:
+            seen.add(attr)
+            non_trackable.append(attr)
+
+    return trackable, non_trackable

@@ -48,7 +48,7 @@ PREDS_DIR = Path(__file__).parent / "preds" / EVAL_DATASET
 DATASET_APP_CONFIG_ID: dict[str, int] = {
     "bird": 1,
     "ppe": 2,
-    "yolov8n": 3,
+    "yolo": 3,
 }
 APP_CONFIG_ID = DATASET_APP_CONFIG_ID.get(EVAL_DATASET)
 

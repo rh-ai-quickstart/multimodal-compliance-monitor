@@ -130,5 +130,23 @@
     "question": "how many people wore a mask and a safety vest but didn't wear a hardhat in the last 2 hours",
     "description": "Hardhat: 1, Mask: 1, NO-Hardhat: 2, NO-Mask: 1, NO-Safety Vest: 2, Person: 3",
     "golden_answer": "0 people wore a mask and a safety vest but didn't wear a hardhat in the last 2 hours"
+  },
+  {
+    "id": "db_test_23",
+    "question": "How many people with masks today",
+    "description": "Detected: Hardhat: 2, Mask: 1, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
+    "golden_answer": "6 people wore a mask today"
+  },
+  {
+    "id": "db_test_24",
+    "question": "How many total persons have we seen today?",
+    "description": "Detected: Hardhat: 2, Mask: 1, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
+    "golden_answer": "25 total persons have been seen today"
+  },
+  {
+    "id": "db_test_25",
+    "question": "How many people wore a hard hat and a vest today",
+    "description": "Detected: Hardhat: 2, Mask: 1, NO-Hardhat: 4, NO-Mask: 4, NO-Safety Vest: 4, Person: 6",
+    "golden_answer": "0 people wore a hard hat and a vest today"
   }
 ]

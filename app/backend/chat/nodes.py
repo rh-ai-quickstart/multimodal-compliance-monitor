@@ -126,11 +126,6 @@ def make_sql_agent_node(llm: ChatOpenAI, execute_sql_tool: StructuredTool):
         app_config_id = state.get("app_config_id")
         classes_info = state.get("classes_info")
 
-        generator_prompt = build_sql_generator_prompt(
-            app_config_id=app_config_id,
-            classes_info=classes_info,
-        )
-
         @tool
         async def query_metric(metric: str, error_context: str = "") -> str:
             """Generate and execute a SQL query for the given metric.
@@ -140,6 +135,11 @@ def make_sql_agent_node(llm: ChatOpenAI, execute_sql_tool: StructuredTool):
                 error_context: Optional error from a previous attempt so the
                     query can be corrected.
             """
+            generator_prompt = build_sql_generator_prompt(
+                metric=metric,
+                app_config_id=app_config_id,
+                classes_info=classes_info,
+            )
             human_content = metric
             if error_context:
                 human_content += (

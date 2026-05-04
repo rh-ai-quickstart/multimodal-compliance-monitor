@@ -647,11 +647,97 @@ def execute_query(sql: str) -> list:
         return [dict(row) for row in results]
 
 
-def get_schema_description() -> str:
+def get_latest_description() -> str:
+    """Build a detection description from the last 2 seconds of observations.
+
+    Uses majority voting on JSONB attributes per track to resolve noisy
+    per-frame PPE labels into stable per-person counts.  For datasets
+    without attributes (e.g. YOLO, Bird) it falls back to simple
+    distinct-track counts per class.
+    """
+    query = """\
+WITH recent_obs AS (
+    SELECT do2.track_id, do2.attributes, dc.name AS class_name,
+           dc.app_config_id, dc.include_in_counts
+    FROM detection_observations do2
+    JOIN detection_tracks dt ON do2.track_id = dt.track_id
+    JOIN detection_classes dc ON dt.detection_classes_id = dc.id
+    WHERE do2.timestamp >= NOW() - INTERVAL '2 seconds'
+),
+track_counts AS (
+    SELECT class_name AS label, COUNT(DISTINCT track_id)::int AS count
+    FROM recent_obs
+    WHERE include_in_counts = true
+    GROUP BY class_name
+),
+attr_expanded AS (
+    SELECT track_id, app_config_id, key, value::boolean AS val
+    FROM recent_obs, jsonb_each_text(attributes) AS kv(key, value)
+    WHERE attributes != '{}'
+),
+majority AS (
+    SELECT track_id, app_config_id, key,
+           (SUM(CASE WHEN val THEN 1 ELSE 0 END) > COUNT(*) / 2.0) AS has_item
+    FROM attr_expanded
+    GROUP BY track_id, app_config_id, key
+),
+attr_counts AS (
+    SELECT dc2.name AS label, COUNT(*)::int AS count
+    FROM majority m
+    JOIN detection_classes dc2
+        ON dc2.app_config_id = m.app_config_id
+        AND dc2.trackable = false
+        AND LOWER(REPLACE(dc2.name, 'NO-', '')) LIKE '%%' || m.key || '%%'
+        AND (
+            (m.has_item AND dc2.name NOT LIKE 'NO-%%')
+            OR (NOT m.has_item AND dc2.name LIKE 'NO-%%')
+        )
+    GROUP BY dc2.name
+)
+SELECT label, count FROM (
+    SELECT * FROM track_counts
+    UNION ALL
+    SELECT * FROM attr_counts
+) combined
+WHERE count > 0
+ORDER BY label
+"""
+    with get_readonly_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query)
+        rows = cursor.fetchall()
+
+    if not rows:
+        return ""
+
+    parts = [f"{label}: {count}" for label, count in rows]
+    return "Detected: " + ", ".join(parts)
+
+
+def get_schema_description(classes_info: list[dict] | None = None) -> str:
     """
     Return the database schema description for the LLM prompt.
     Used by the Text-to-SQL chatbot to understand the data model.
+
+    When *classes_info* is provided, the ``attributes`` JSONB example is
+    generated from the actual non-trackable classes for the active config.
     """
+    # non_trackables = (
+    #     [c["name"].lower() for c in classes_info if not c["trackable"]]
+    #     if classes_info
+    #     else []
+    # )
+    # if non_trackables:
+    #     if len(non_trackables) <= 3:
+    #         example_json = ", ".join(f'"{k}": true/false' for k in non_trackables)
+    #     else:
+    #         example_json = (
+    #             ", ".join(f'"{k}": true/false' for k in non_trackables[:3]) + ", ..."
+    #         )
+    #     attrs_example = f"{{{example_json}}}"
+    # else:
+    #     attrs_example = '{"attr": true/false}'
+
     return """\
 DATABASE SCHEMA:
 
@@ -661,19 +747,15 @@ Table: app_config
 - model_name (VARCHAR): served model id
 - video_source (VARCHAR): Video path or RTSP URL
 - created_at (TIMESTAMP): When config was created
-- Inference input tensor name: backend env MODEL_INPUT_NAME only (not in this table; Runtime defaults to x if unset)
-- classes: Derived from detection_classes (model_class_index, name, trackable)
 
 Table: detection_classes
-- id (SERIAL, PRIMARY KEY): Class ID
+- id (SERIAL, PRIMARY KEY): Detection class ID
 - app_config_id (INTEGER, FOREIGN KEY → app_config.id): Config that defines this class
-- model_class_index (INTEGER): Model output index (0, 1, 2, ...)
-- name (VARCHAR): Class name, e.g. "Person", "Hardhat"
-- trackable (BOOLEAN): Whether to track this class for unique counting
+- name (VARCHAR): Class label
 
 Table: detection_tracks
 - track_id (INTEGER, PRIMARY KEY): Unique identifier for each tracked detection
-- detection_classes_id (INTEGER, FOREIGN KEY → detection_classes.id): Links to the detection class (e.g. Person)
+- detection_classes_id (INTEGER, FOREIGN KEY → detection_classes.id): Links to the trackable detection class
 - first_seen (TIMESTAMP): When the track was first detected
 - last_seen (TIMESTAMP): When the track was last detected
 
@@ -681,6 +763,6 @@ Table: detection_observations
 - id (SERIAL, PRIMARY KEY): Auto-incrementing observation ID
 - track_id (INTEGER, FOREIGN KEY → detection_tracks.track_id): Links to the track
 - timestamp (TIMESTAMP): When this observation was recorded
-- attributes (JSONB): Flexible attributes. For PPE persons: {"hardhat": true/false, "vest": true/false, "mask": true/false}
+- attributes (JSONB): Flexible attributes. For PPE persons: {"hardhat": true/false, "vest": true/false, "mask": true/false} for other datasets is {}
 
 """
