@@ -382,9 +382,12 @@ def _tracker_process_target(
             det_frames: list[list[dict]] = []
             for item in raw_items:
                 if item == _RESET:
-                    tracker.reset()
+                    new_offset = get_max_track_id()
+                    tracker.reset(new_offset=new_offset)
                     person_last_state.clear()
                     det_frames.clear()
+                    current_epoch = -1
+                    log.info("Tracker: reset with new track_id_offset=%d", new_offset)
                     continue
 
                 if isinstance(item, dict):
@@ -553,13 +556,15 @@ class _Tracker:
         self._track_history: dict[int, dict[str, datetime]] = {}
         self._frames_since_last_seen_update = 0
 
-    def reset(self) -> None:
+    def reset(self, new_offset: int | None = None) -> None:
         self._tracker = sv.ByteTrack(
             lost_track_buffer=self._max_age,
             minimum_consecutive_frames=self._n_init,
         )
         self._track_history = {}
         self._frames_since_last_seen_update = 0
+        if new_offset is not None:
+            self._track_id_offset = new_offset
 
     def update(
         self,
