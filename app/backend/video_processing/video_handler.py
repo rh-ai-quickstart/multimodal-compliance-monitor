@@ -10,7 +10,7 @@ from database import init_database, get_detection_classes_pipeline_maps
 from logger import get_logger
 from video_processing.consumer import FrameConsumer
 from video_processing.inference import InferencePool
-from video_processing.tracking import TrackerProcess
+from video_processing.tracking import DB_WRITER_QUEUE_MAXSIZE, TrackerProcess
 
 log = get_logger(__name__)
 
@@ -30,7 +30,7 @@ class VideoHandler:
         """Initialize the demo. video_source can be None; call start_streaming() when user selects a source."""
         self.video_source = video_source
         self.cap = None
-        self._streaming_started = False
+        self._is_streaming = False
         self.latest_detection = defaultdict(int)
         self.latest_summary = ""
         self.latest_description = ""
@@ -50,6 +50,7 @@ class VideoHandler:
         self._description_vote_buffer: deque[str] = deque(
             maxlen=self.DESCRIPTION_VOTE_WINDOW
         )
+        self._epoch: int = 0
 
         self.init_setup()
 
@@ -82,12 +83,20 @@ class VideoHandler:
 
     def _log_queue_sizes(self) -> None:
         while not self._stop_event.wait(timeout=2.0):
+            tracker_q = self._tracker._in_queue if self._tracker else None
+            tracker_size = tracker_q.qsize() if tracker_q else -1
+            tracker_max = tracker_q._maxsize if tracker_q else -1
+            db_depth = self._tracker._db_queue_depth.value if self._tracker else -1
             log.info(
-                "queue sizes: frame_queue=%d/%d inference_out_queue=%d/%d",
+                "queue sizes: frame_queue=%d/%d inference_out=%d/%d tracker_in=%d/%d db_writer=%d/%d",
                 self._frame_queue.qsize(),
                 self._frame_queue.maxsize,
                 self._inference_out_queue.qsize(),
                 self._inference_out_queue.maxsize,
+                tracker_size,
+                tracker_max,
+                db_depth,
+                DB_WRITER_QUEUE_MAXSIZE,
             )
 
     def _shutdown(self):
@@ -110,16 +119,19 @@ class VideoHandler:
             get_detection_classes_pipeline_maps(config_id)
         )
         self._class_names_in_order = [classes[i] for i in sorted(classes)]
-        self._inference_pool.configure(config_id)
+        self._inference_pool.configure(config_id, epoch=self._epoch)
         self._tracker.configure(
             trackable_by_class_id=trackable,
             detection_class_name_to_id=name_to_id,
+            epoch=self._epoch,
         )
         self._consumer.set_source(video_source)
-        self._streaming_started = True
+        self._is_streaming = True
         log.info(f"Streaming started for source={video_source} config_id={config_id}")
 
     def stop_streaming(self):
+        self._is_streaming = False
+        self._epoch += 1
         if self._consumer is not None:
             self._consumer.make_idle()
 
@@ -136,7 +148,6 @@ class VideoHandler:
         self._description_buffer.clear()
         self._description_vote_buffer.clear()
         self._active_config_id = None
-        self._streaming_started = False
         log.info("Streaming stopped")
 
     def stop_streaming_if_active_config(self, config_id: int):
@@ -326,12 +337,21 @@ class VideoHandler:
 
     def frame_generator(self):
         time.sleep(1)
+        current_epoch = self._epoch
         frame_interval = self._consumer.frame_interval
         last_yield_time = time.perf_counter()
         try:
-            while True:
+            while self._is_streaming:
                 result = self.get_frame_and_detection_from_inference()
                 if result is None:
+                    continue
+
+                if result.epoch != current_epoch:
+                    log.debug(
+                        "Dropping stale inference result (epoch %d != %d)",
+                        result.epoch,
+                        current_epoch,
+                    )
                     continue
 
                 self.latest_description = self._format_detection_description(
@@ -346,7 +366,7 @@ class VideoHandler:
                 if chunk is None:
                     continue
 
-                self._tracker.submit(result.detections)
+                self._tracker.submit(result.detections, epoch=current_epoch)
 
                 elapsed = time.perf_counter() - last_yield_time
                 sleep_time = frame_interval - elapsed

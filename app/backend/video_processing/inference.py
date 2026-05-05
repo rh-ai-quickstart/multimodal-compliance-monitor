@@ -34,6 +34,7 @@ class InferenceResult:
     frame_id: int
     detections: list[dict]
     counts: defaultdict
+    epoch: int = 0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -46,6 +47,7 @@ class _PipelineConfig:
     include_in_counts: dict[int, bool]
     trackable: dict[int, bool]
     version: int
+    epoch: int = 0
 
 
 class InferencePool:
@@ -112,11 +114,13 @@ class InferencePool:
         for t in self._threads:
             t.join(timeout=per_thread)
 
-    def configure(self, config_id: int) -> None:
+    def configure(self, config_id: int, epoch: int = 0) -> None:
         """Send a configure message through the queue so a worker rebuilds the shared pipeline config."""
-        self._in_queue.put({"kind": _MSG_CONFIGURE, "config_id": config_id})
+        self._in_queue.put(
+            {"kind": _MSG_CONFIGURE, "config_id": config_id, "epoch": epoch}
+        )
 
-    def _build_pipeline_config(self, config_id: int) -> None:
+    def _build_pipeline_config(self, config_id: int, epoch: int = 0) -> None:
         """Query the DB and store a new ``_PipelineConfig``.  Called under ``_config_lock``."""
         config = None
         if config_id is not None:
@@ -165,15 +169,16 @@ class InferencePool:
             include_in_counts=include_in_counts,
             trackable=trackable,
             version=prev_version + 1,
+            epoch=epoch,
         )
         log.info(
             f"InferencePool: pipeline config v{self._config.version} "
             f"config_id={config['id']} service_url={model_url} model_name={model_name}"
         )
 
-    def _handle_configure(self, config_id: int, name: str) -> None:
+    def _handle_configure(self, config_id: int, epoch: int, name: str) -> None:
         with self._config_lock:
-            self._build_pipeline_config(config_id)
+            self._build_pipeline_config(config_id, epoch)
         with self._reorder_lock:
             self._pending.clear()
             self._next_frame_id = 1
@@ -225,7 +230,9 @@ class InferencePool:
                             isinstance(item, dict)
                             and item.get("kind") == _MSG_CONFIGURE
                         ):
-                            self._handle_configure(item["config_id"], name)
+                            self._handle_configure(
+                                item["config_id"], item.get("epoch", 0), name
+                            )
                             local_runtime = None
                             local_config_version = 0
                             batch.clear()
@@ -307,6 +314,7 @@ class InferencePool:
                             frame_id=frame_ids[i],
                             detections=detections,
                             counts=counts,
+                            epoch=cfg.epoch,
                         )
                     )
 

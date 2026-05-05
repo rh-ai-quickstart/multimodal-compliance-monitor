@@ -4,7 +4,7 @@ import json
 import queue as queue_mod
 import threading
 from datetime import datetime
-from multiprocessing import Event, Process, Queue
+from multiprocessing import Event, Process, Queue, Value
 
 import numpy as np
 import supervision as sv
@@ -42,6 +42,7 @@ _SQL_BY_OP = {
 _OP_ORDER = (_OP_INSERT_TRACK, _OP_UPDATE_LAST_SEEN, _OP_INSERT_OBSERVATION)
 
 _MAX_DRAIN = 8
+DB_WRITER_QUEUE_MAXSIZE = 64
 
 
 class TrackerProcess:
@@ -66,6 +67,7 @@ class TrackerProcess:
 
         self._in_queue: Queue = Queue(maxsize=100)
         self._stop = Event()
+        self._db_queue_depth = Value("i", 0)
         self._process: Process | None = None
 
     def start(self) -> None:
@@ -78,6 +80,7 @@ class TrackerProcess:
                 self._max_age,
                 self._n_init,
                 self._last_seen_update_interval,
+                self._db_queue_depth,
             ),
             daemon=True,
         )
@@ -96,6 +99,7 @@ class TrackerProcess:
         self,
         trackable_by_class_id: dict[int, bool],
         detection_class_name_to_id: dict[str, int],
+        epoch: int = 0,
     ) -> None:
         """Send new pipeline config to the process (called on stream start/switch)."""
         try:
@@ -104,16 +108,17 @@ class TrackerProcess:
                     "kind": _CONFIGURE,
                     "trackable_by_class_id": trackable_by_class_id,
                     "detection_class_name_to_id": detection_class_name_to_id,
+                    "epoch": epoch,
                 },
                 timeout=5.0,
             )
         except queue_mod.Full:
             log.error("Tracker: failed to send CONFIGURE (queue full)")
 
-    def submit(self, detections: list[dict]) -> None:
+    def submit(self, detections: list[dict], epoch: int = 0) -> None:
         """Fire-and-forget: enqueue detection dicts for the child process."""
         try:
-            self._in_queue.put_nowait(detections)
+            self._in_queue.put_nowait((epoch, detections))
         except queue_mod.Full:
             log.warning("Tracker input queue full, dropping frame")
 
@@ -138,11 +143,9 @@ class _BatchDbWriter:
     that pile up while the DB is busy collapse into a single round-trip.
     """
 
-    _QUEUE_MAXSIZE = 64
-
     def __init__(self) -> None:
         self._queue: queue_mod.Queue[list[tuple[str, tuple]] | None] = queue_mod.Queue(
-            maxsize=self._QUEUE_MAXSIZE
+            maxsize=DB_WRITER_QUEUE_MAXSIZE
         )
         self._conn = None
         self._thread = threading.Thread(
@@ -336,6 +339,7 @@ def _tracker_process_target(
     max_age: int,
     n_init: int,
     last_seen_update_interval: int,
+    db_queue_depth_shared: Value = None,
 ) -> None:
     from logger import get_logger
 
@@ -357,6 +361,7 @@ def _tracker_process_target(
     trackable_by_class_id: dict[int, bool] = {}
     detection_class_name_to_id: dict[str, int] = {}
     person_last_state: dict[int, tuple] = {}
+    current_epoch: int = -1
 
     log.info("Tracker process started")
     try:
@@ -387,17 +392,30 @@ def _tracker_process_target(
                     if kind == _CONFIGURE:
                         trackable_by_class_id = item["trackable_by_class_id"]
                         detection_class_name_to_id = item["detection_class_name_to_id"]
+                        current_epoch = item.get("epoch", -1)
                         person_last_state.clear()
                         log.info(
-                            "Tracker: configured with %d trackable classes, "
+                            "Tracker: configured epoch=%d with %d trackable classes, "
                             "%d name-to-id mappings",
+                            current_epoch,
                             sum(1 for v in trackable_by_class_id.values() if v),
                             len(detection_class_name_to_id),
                         )
                         det_frames.clear()
                         continue
 
-                det_frames.append(item)
+                if isinstance(item, tuple) and len(item) == 2:
+                    item_epoch, detections = item
+                    if item_epoch != current_epoch:
+                        log.debug(
+                            "Tracker: dropping stale detections (epoch %d != %d)",
+                            item_epoch,
+                            current_epoch,
+                        )
+                        continue
+                    det_frames.append(detections)
+                else:
+                    det_frames.append(item)
 
             if not det_frames:
                 continue
@@ -491,6 +509,9 @@ def _tracker_process_target(
                 )
 
             db.submit_batch(combined_batch)
+
+            if db_queue_depth_shared is not None:
+                db_queue_depth_shared.value = db._queue.qsize()
 
     except Exception:
         log.exception("Tracker process crashed")
