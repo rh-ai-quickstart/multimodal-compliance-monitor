@@ -61,7 +61,7 @@ Static overview (SVG): [`docs/images/architecture.svg`](docs/images/architecture
 | **UI** | React, React Router, Axios | Dashboard, RTSP/MP4 source selection, configuration page, chat with Markdown |
 | **API** | Flask (`/api/*`) | Config, active source, video feed, chat, uploads |
 | **Inference** | OVMS (`ovmsclient`) or Triton (`tritonclient` via KServe) | Model serving; gRPC inference from the backend |
-| **Tracking** | Supervision (ByteTrack) | Multi-object tracking |
+| **Tracking** | BoxMOT (BoostTrack++) | Multi-object tracking |
 | **LLM** | OpenAI-compatible API, LangGraph / LangChain | Chat; optional read-only **postgres-mcp** SQL tools |
 | **Observability** | Arize Phoenix (optional) | Tracing |
 | **Storage** | MinIO | Models, videos, uploads, thumbnails, config objects |
@@ -79,7 +79,7 @@ Static overview (SVG): [`docs/images/architecture.svg`](docs/images/architecture
 
 ### Components
 
-- **Backend** (Flask, OpenCV): video decode, MJPEG output, and drawn overlays; **inference** over gRPC to **OpenVINO Model Server** (`ovmsclient`, local/CPU) or **Triton** via `tritonclient` (KServe / GPU path); **multi-object tracking** with **Supervision** (ByteTrack); **PostgreSQL** for app configs, classes, tracks, and observations; **MinIO** for object storage; **LLM chat** with **LangGraph** / **LangChain** (OpenAI-compatible API) and optional read-only **postgres-mcp** for SQL tools; optional **Arize Phoenix** for tracing
+- **Backend** (Flask, OpenCV): video decode, MJPEG output, and drawn overlays; **inference** over gRPC to **OpenVINO Model Server** (`ovmsclient`, local/CPU) or **Triton** via `tritonclient` (KServe / GPU path); **multi-object tracking** with **BoxMOT** (BoostTrack++); **PostgreSQL** for app configs, classes, tracks, and observations; **MinIO** for object storage; **LLM chat** with **LangGraph** / **LangChain** (OpenAI-compatible API) and optional read-only **postgres-mcp** for SQL tools; optional **Arize Phoenix** for tracing
 - **Frontend** (React, React Router, Axios): dashboard, source selection (RTSP / MP4 thumbnails), configuration page, and chat with Markdown rendering
 - **OpenVINO Model Server (OVMS)**: model serving; local stack also runs **yolo-model-prep** (Ultralytics-based export) to build the model repo from `app/models/*.pt` before OVMS starts
 - **MinIO**: S3-compatible object storage for models, videos, uploads, and config-related objects

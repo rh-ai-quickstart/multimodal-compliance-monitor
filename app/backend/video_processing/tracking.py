@@ -46,18 +46,18 @@ DB_WRITER_QUEUE_MAXSIZE = 64
 
 
 class TrackerProcess:
-    """Fire-and-forget background process: ByteTrack tracking + batched DB writes.
+    """Fire-and-forget background process: BoostTrack++ tracking + batched DB writes.
 
     The main thread pushes detection dicts via :meth:`submit`.  No frame pixels
-    are sent through the queue (ByteTrack is motion-only, no embedding CNN).
-    The child runs ByteTrack, associates PPE items to tracked persons via
-    vectorized numpy overlap, and writes tracks/observations to PostgreSQL in
-    batches.
+    are sent through the queue (BoostTrack++ runs in motion-only mode with
+    use_ecc=False, with_reid=False).  The child runs BoostTrack++, associates
+    PPE items to tracked persons via vectorized numpy overlap, and writes
+    tracks/observations to PostgreSQL in batches.
     """
 
     def __init__(
         self,
-        max_age: int = 30,
+        max_age: int = 100,
         n_init: int = 3,
         last_seen_update_interval: int = 30,
     ) -> None:
@@ -330,6 +330,15 @@ def _dicts_to_sv_detections(detections: list[dict]) -> sv.Detections:
     )
 
 
+def _sv_to_boosttrack_dets(sv_dets: sv.Detections) -> np.ndarray:
+    """Convert supervision Detections to the (N, 6) array BoostTrack expects."""
+    if len(sv_dets) == 0:
+        return np.empty((0, 6), dtype=np.float32)
+    return np.column_stack([sv_dets.xyxy, sv_dets.confidence, sv_dets.class_id]).astype(
+        np.float32
+    )
+
+
 # ----- Process target -----
 
 
@@ -423,7 +432,7 @@ def _tracker_process_target(
             if not det_frames:
                 continue
 
-            # --- Phase 1: Sequential ByteTrack updates ---
+            # --- Phase 1: Sequential BoostTrack++ updates ---
             tracker_results: list[tuple[_TrackerResult, list[dict]]] = []
             for detections in det_frames:
                 sv_dets = _dicts_to_sv_detections(detections)
@@ -535,7 +544,9 @@ def _drain(q: Queue) -> None:
 
 
 class _Tracker:
-    """Internal ByteTrack wrapper -- only called from within the tracker process."""
+    """Internal BoostTrack++ wrapper -- only called from within the tracker process."""
+
+    _DUMMY_IMG = np.empty((1, 1, 3), dtype=np.uint8)
 
     def __init__(
         self,
@@ -549,18 +560,33 @@ class _Tracker:
         self._last_seen_update_interval = last_seen_update_interval
         self._track_id_offset = track_id_offset
 
-        self._tracker = sv.ByteTrack(
-            lost_track_buffer=max_age,
-            minimum_consecutive_frames=n_init,
-        )
+        self._tracker = self._make_tracker()
         self._track_history: dict[int, dict[str, datetime]] = {}
         self._frames_since_last_seen_update = 0
 
-    def reset(self, new_offset: int | None = None) -> None:
-        self._tracker = sv.ByteTrack(
-            lost_track_buffer=self._max_age,
-            minimum_consecutive_frames=self._n_init,
+    def _make_tracker(self):
+        from boxmot.trackers import BoostTrack
+
+        return BoostTrack(
+            with_reid=False,
+            use_ecc=False,
+            det_thresh=0.60,
+            max_age=self._max_age,
+            min_hits=self._n_init,
+            iou_threshold=0.2,
+            use_dlo_boost=True,
+            use_duo_boost=True,
+            dlo_boost_coef=0.75,
+            lambda_iou=0.1,
+            lambda_mhd=0.8,
+            lambda_shape=0.1,
+            use_rich_s=True,
+            use_sb=True,
+            use_vt=True,
         )
+
+    def reset(self, new_offset: int | None = None) -> None:
+        self._tracker = self._make_tracker()
         self._track_history = {}
         self._frames_since_last_seen_update = 0
         if new_offset is not None:
@@ -589,19 +615,21 @@ class _Tracker:
             trackable_dets = sv_dets[mask]
 
             if len(trackable_dets) > 0:
-                tracked = self._tracker.update_with_detections(trackable_dets)
+                dets_array = _sv_to_boosttrack_dets(trackable_dets)
+                class_names = trackable_dets.data.get("class_name")
+                results = self._tracker.update(dets_array, self._DUMMY_IMG)
 
-                for i in range(len(tracked)):
-                    tid = int(tracked.tracker_id[i]) + self._track_id_offset
-                    x1, y1, x2, y2 = tracked.xyxy[i].astype(int)
+                for row in results:
+                    x1, y1, x2, y2 = row[0:4].astype(int)
+                    tid = int(row[4]) + self._track_id_offset
+                    det_ind = int(row[7])
                     tracked_boxes[tid] = (int(x1), int(y1), int(x2), int(y2))
-                    if (
-                        tracked.data.get("class_name") is not None
-                        and len(tracked.data["class_name"]) > i
-                    ):
-                        track_det_class[tid] = tracked.data["class_name"][i]
+                    if class_names is not None and 0 <= det_ind < len(class_names):
+                        track_det_class[tid] = class_names[det_ind]
             else:
-                self._tracker.update_with_detections(sv.Detections.empty())
+                self._tracker.update(
+                    np.empty((0, 6), dtype=np.float32), self._DUMMY_IMG
+                )
 
         new_track_ids, updated_track_ids = self._update_history(tracked_boxes)
 
