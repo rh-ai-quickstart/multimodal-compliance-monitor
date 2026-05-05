@@ -1,0 +1,68 @@
+[
+  {
+    "id": "db_test_01",
+    "question": "how many cars were detected in the last 15 minutes",
+    "description": "car: 8, truck: 1",
+    "golden_answer": "4 cars were detected in the last 15 minutes"
+  },
+  {
+    "id": "db_test_02",
+    "question": "how many cars were detected in the last 2 hours",
+    "description": "car: 3, truck: 1",
+    "golden_answer": "13 cars were detected in the last 2 hours"
+  },
+  {
+    "id": "db_test_03",
+    "question": "how many trucks were detected in the past 45 minutes",
+    "description": "car: 6, truck: 2",
+    "golden_answer": "3 trucks were detected in the past 45 minutes"
+  },
+  {
+    "id": "db_test_04",
+    "question": "how many buses were detected in the last 2 hours",
+    "description": "car: 7, truck: 1, bus: 1",
+    "golden_answer": "0 buses were detected in the last 2 hours"
+  },
+  {
+    "id": "db_test_05",
+    "question": "how many cars and trucks were detected in the last 2 hours",
+    "description": "car: 4, truck: 3",
+    "golden_answer": "13 cars and 3 trucks were detected in the last 2 hours"
+  },
+  {
+    "id": "db_test_06",
+    "question": "how many vehicles were detected in total in the past 2 hours",
+    "description": "car: 6, truck: 1, bus: 1",
+    "golden_answer": "17 vehicles were detected in total in the past 2 hours"
+  },
+  {
+    "id": "db_test_07",
+    "question": "how many vehicles were detected today",
+    "description": "car: 3, truck: 2",
+    "golden_answer": "17 vehicles were detected today"
+  },
+  {
+    "id": "db_test_08",
+    "question": "how many motorcycles were detected in the last 2 hours",
+    "description": "car: 5, truck: 1",
+    "golden_answer": "1 motorcycle was detected in the last 2 hours"
+  },
+  {
+    "id": "db_test_09",
+    "question": "how many trains were detected in the past day",
+    "description": "car: 7, truck: 2, bus: 1",
+    "golden_answer": "0 trains were detected in the past day"
+  },
+  {
+    "id": "db_test_10",
+    "question": "what percentage of detected vehicles were cars in the last 2 hours",
+    "description": "car: 5, truck: 1, bus: 1",
+    "golden_answer": "13 out of 17 detected vehicles were cars in the last 2 hours"
+  },
+  {
+    "id": "db_test_11",
+    "question": "how many trucks were there compared to buses in the last 2 hours",
+    "description": "car: 3, truck: 1, bus: 1",
+    "golden_answer": "3 trucks and 0 buses were detected in the last 2 hours"
+  }
+]
