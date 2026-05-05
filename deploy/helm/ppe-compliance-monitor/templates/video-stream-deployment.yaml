@@ -64,6 +64,11 @@ spec:
         - name: mediamtx
           image: "{{ .Values.videoStream.image.repository }}:{{ .Values.videoStream.image.tag }}"
           imagePullPolicy: {{ .Values.videoStream.image.pullPolicy }}
+          env:
+            - name: MTX_WRITEQUEUESIZE
+              value: "2048"
+            - name: MTX_UDPREADBUFFERSIZE
+              value: "4194304"
           ports:
             - containerPort: {{ .Values.videoStream.port }}
               name: rtsp

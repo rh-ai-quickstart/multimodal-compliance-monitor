@@ -132,6 +132,8 @@ class FrameConsumer:
         else:
             self._resolved_path = self._video_source
 
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "buffer_size;2097152"
+
         self._cap = cv2.VideoCapture(self._resolved_path)
         if not self._cap.isOpened():
             log.error(f"FrameConsumer: failed to open source {self._video_source}")

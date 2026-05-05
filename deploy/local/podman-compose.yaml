@@ -94,6 +94,9 @@ services:
   video-stream:
     image: docker.io/bluenviron/mediamtx@sha256:9e39256d1ba35f0063700c6f62dd32e6db4592ddd9560d78f409ec451d79b1d8
     container_name: video-stream
+    environment:
+      MTX_WRITEQUEUESIZE: "2048"
+      MTX_UDPREADBUFFERSIZE: "4194304"
     ports:
       - "8554:8554"
     networks:
