@@ -1,0 +1,122 @@
+[
+  {
+    "id": "alert_01",
+    "rule": "Alert me when people are not wearing a hardhat in the last 15 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '15 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true)) sub",
+    "golden_result": "0"
+  },
+  {
+    "id": "alert_02",
+    "rule": "Notify me if any person is detected without a mask in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '45 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true)) sub",
+    "golden_result": "8"
+  },
+  {
+    "id": "alert_03",
+    "rule": "Alert when people are seen without a safety vest in the past 2 hours",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '2 hours' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true)) sub",
+    "golden_result": "17"
+  },
+  {
+    "id": "alert_04",
+    "rule": "Alert me when people are wearing a hardhat in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '45 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false)) sub",
+    "golden_result": "7"
+  },
+  {
+    "id": "alert_05",
+    "rule": "Notify me if people with masks are detected in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '45 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false)) sub",
+    "golden_result": ""
+  },
+  {
+    "id": "alert_06",
+    "rule": "Alert me when workers are wearing a safety vest in the past 2 hours",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '2 hours' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false)) sub",
+    "golden_result": "9"
+  },
+  {
+    "id": "alert_07",
+    "rule": "Alert me when people don't have a hardhat and mask in the last 2 hours",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '2 hours' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true) AND COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true)) sub",
+    "golden_result": "8"
+  },
+  {
+    "id": "alert_08",
+    "rule": "Notify when workers are missing both a safety vest and hardhat in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '45 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true) AND COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true)) sub",
+    "golden_result": "2"
+  },
+  {
+    "id": "alert_09",
+    "rule": "Alert if people without a mask and without a vest are detected in the last 15 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '15 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true) AND COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true)) sub",
+    "golden_result": "1"
+  },
+  {
+    "id": "alert_10",
+    "rule": "Alert me when people are wearing a hardhat but have no mask in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '45 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) AND COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true)) sub",
+    "golden_result": "7"
+  },
+  {
+    "id": "alert_11",
+    "rule": "Notify me if workers have a mask but no safety vest in the past 2 hours",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '2 hours' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false) AND COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true)) sub",
+    "golden_result": "5"
+  },
+  {
+    "id": "alert_12",
+    "rule": "Alert when people are wearing a safety vest but not a hardhat in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '45 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false) AND COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true)) sub",
+    "golden_result": ""
+  },
+  {
+    "id": "alert_13",
+    "rule": "Alert me if people are fully compliant with all PPE in the last 2 hours",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '2 hours' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) AND COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false) AND COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false)) sub",
+    "golden_result": "0"
+  },
+  {
+    "id": "alert_14",
+    "rule": "Alert when people are detected with no PPE at all in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '45 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true) AND COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true) AND COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true)) sub",
+    "golden_result": "1"
+  },
+  {
+    "id": "alert_15",
+    "rule": "Alert me when more than 20 people are detected in the last 2 hours",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND dt.first_seen >= NOW() - INTERVAL '2 hours'",
+    "golden_result": "28"
+  },
+  {
+    "id": "alert_16",
+    "rule": "Notify me if people have a hardhat and mask but no safety vest in the last 2 hours",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '2 hours' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) AND COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false) AND COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true)) sub",
+    "golden_result": "0"
+  },
+  {
+    "id": "alert_17",
+    "rule": "Alert when people are wearing a safety vest but don't have a hardhat or mask in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '45 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false) AND COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true) AND COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true)) sub",
+    "golden_result": "0"
+  },
+  {
+    "id": "alert_18",
+    "rule": "Warn me if workers show up without their helmets in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '45 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true)) sub",
+    "golden_result": ""
+  },
+  {
+    "id": "alert_19",
+    "rule": "Alert me if anyone is spotted without face coverings in the past 45 minutes",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '45 minutes' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true)) sub",
+    "golden_result": "8"
+  },
+  {
+    "id": "alert_20",
+    "rule": "Notify me when workers are missing all their protective gear in the last 2 hours",
+    "golden_sql": "SELECT COUNT(*) FROM (SELECT dt.track_id FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id JOIN detection_observations obs ON obs.track_id = dt.track_id WHERE dc.app_config_id = 2 AND dc.name = 'Person' AND obs.timestamp >= NOW() - INTERVAL '2 hours' GROUP BY dt.track_id HAVING COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'hardhat')::boolean = true) AND COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'vest')::boolean = true) AND COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = false) > COUNT(*) FILTER (WHERE (obs.attributes->>'mask')::boolean = true)) sub",
+    "golden_result": "8"
+  }
+]

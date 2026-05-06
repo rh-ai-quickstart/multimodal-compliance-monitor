@@ -1,9 +1,12 @@
-"""Standalone evaluation script for the /api/chat endpoint.
+"""Standalone evaluation script for the backend endpoints.
+
+Supports two features (selected by EVAL_FEATURE env var):
+- ``chat`` (default): evaluates /api/chat with GEval LLM judge
+- ``alerts``: evaluates /alerts by comparing SQL query results
 
 Auto-discovers all ``*.json`` experiment files inside
-``datasets/<EVAL_DATASET>/``, calls the running backend's chat REST API for
-each entry, and uses DeepEval's GEval (Correctness) metric with VLLMJudge to
-score the responses.
+``datasets/<EVAL_FEATURE>/<EVAL_DATASET>/``, calls the corresponding REST API,
+and scores the responses.
 
 Before running, the live database is snapshotted to a volume-backed file.
 Eval seed data is loaded, all experiments run, and the live data is restored
@@ -11,8 +14,8 @@ in a ``finally`` block (even on error).
 
 Usage::
 
-    EVAL_DATASET=ppe python run_eval.py
-    EVAL_DATASET=bird python run_eval.py
+    EVAL_DATASET=ppe make eval
+    EVAL_FEATURE=alerts EVAL_DATASET=ppe make eval
 
 Requires env vars: OPENAI_API_ENDPOINT, OPENAI_API_TOKEN, OPENAI_MODEL.
 Optionally set BACKEND_URL (default http://localhost:8888).
@@ -22,6 +25,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 import urllib.request
 import uuid
 from datetime import datetime
@@ -33,17 +37,20 @@ from deepeval.metrics import GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 from deepeval.metrics.g_eval import Rubric
 
+from database import get_connection
 from judge_model import VLLMJudge
 from load_seed import save_snapshot, load_seed, restore_snapshot
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8888").rstrip("/")
 CHAT_ENDPOINT = f"{BACKEND_URL}/api/chat"
+ALERTS_ENDPOINT = f"{BACKEND_URL}/api/alerts"
 THRESHOLD = 0.5
 
+EVAL_FEATURE = os.getenv("EVAL_FEATURE", "chat")
 EVAL_DATASET = os.getenv("EVAL_DATASET", "ppe")
-DATASETS_DIR = Path(__file__).parent / "datasets" / EVAL_DATASET
+DATASETS_DIR = Path(__file__).parent / "datasets" / EVAL_FEATURE / EVAL_DATASET
 SEED_SQL_PATH = Path(__file__).parent / "db_seed_data.sql"
-PREDS_DIR = Path(__file__).parent / "preds" / EVAL_DATASET
+PREDS_DIR = Path(__file__).parent / "preds" / EVAL_FEATURE / EVAL_DATASET
 
 DATASET_APP_CONFIG_ID: dict[str, int] = {
     "bird": 1,
@@ -57,11 +64,13 @@ def discover_experiments() -> list[tuple[str, Path]]:
     """Return sorted ``(experiment_name, path)`` pairs for every JSON file in
     the dataset directory."""
     if not DATASETS_DIR.is_dir():
-        available = ", ".join(
-            p.name for p in (Path(__file__).parent / "datasets").iterdir() if p.is_dir()
-        )
+        feature_dir = Path(__file__).parent / "datasets" / EVAL_FEATURE
+        if feature_dir.is_dir():
+            available = ", ".join(p.name for p in feature_dir.iterdir() if p.is_dir())
+        else:
+            available = "(feature directory not found)"
         print(f"ERROR: Dataset directory not found: {DATASETS_DIR}", file=sys.stderr)
-        print(f"Available datasets: {available}", file=sys.stderr)
+        print(f"Available datasets for '{EVAL_FEATURE}': {available}", file=sys.stderr)
         sys.exit(1)
 
     experiments = sorted((p.stem, p) for p in DATASETS_DIR.glob("*.json"))
@@ -222,15 +231,161 @@ def run_experiment(
     return results
 
 
+def call_alert(rule: str, app_config_id: int) -> str:
+    """POST to /alerts and return the generated sql_query."""
+    body: dict = {"rule": rule, "app_config_id": app_config_id}
+    payload = json.dumps(body).encode()
+    req = urllib.request.Request(
+        ALERTS_ENDPOINT,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read())
+
+    alert_id = data.get("id")
+    sql_query = data.get("sql_query")
+
+    if sql_query:
+        return sql_query
+
+    poll_url = f"{ALERTS_ENDPOINT}/{alert_id}"
+    for _ in range(60):
+        time.sleep(2)
+        poll_req = urllib.request.Request(poll_url, method="GET")
+        with urllib.request.urlopen(poll_req, timeout=30) as resp:
+            poll_data = json.loads(resp.read())
+        status = poll_data.get("status")
+        if status == "done":
+            return poll_data["sql_query"]
+        if status == "error":
+            raise RuntimeError(
+                f"Alert pipeline error: {poll_data.get('error', 'unknown')}"
+            )
+
+    raise TimeoutError(f"Alert {alert_id} did not complete within 120s")
+
+
+async def _fetch_alert_one(
+    entry: dict,
+) -> tuple[dict, str | None, str | None]:
+    """Return (entry, predicted_sql, error_str)."""
+    try:
+        sql = await asyncio.to_thread(call_alert, entry["rule"], APP_CONFIG_ID)
+        return entry, sql, None
+    except Exception as exc:
+        return entry, None, str(exc)
+
+
+async def _fetch_alert_all(
+    dataset: list[dict],
+) -> list[tuple[dict, str | None, str | None]]:
+    tasks = [_fetch_alert_one(entry) for entry in dataset]
+    return await asyncio.gather(*tasks)
+
+
+def execute_sql(query: str) -> str:
+    """Execute a SQL query and return the first row's first column as string."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query)
+            row = cur.fetchone()
+            if row is None:
+                return ""
+            return str(row[0])
+
+
+def run_alert_experiment(
+    experiment_name: str,
+    dataset_path: Path,
+    eval_run_id: str,
+) -> list[dict]:
+    """Run a single alert experiment: call /alerts, execute SQL, compare results."""
+    dataset = load_dataset(dataset_path)
+
+    print(f"Sending {len(dataset)} alert requests concurrently ...")
+    fetch_results = asyncio.run(_fetch_alert_all(dataset))
+
+    results: list[dict] = []
+
+    for entry, predicted_sql, error in fetch_results:
+        entry_id = entry["id"]
+        golden_sql = entry["golden_sql"]
+        golden_result = entry.get("golden_result", "")
+
+        if error:
+            print(f"[{entry_id}] ERROR calling alert: {error}")
+            results.append(
+                {
+                    **entry,
+                    "predicted_sql": None,
+                    "predicted_result": None,
+                    "golden_result": golden_result,
+                    "judge_score": 0.0,
+                    "passed": False,
+                    "error": error,
+                }
+            )
+            continue
+
+        try:
+            predicted_result = execute_sql(predicted_sql)
+        except Exception as exc:
+            print(f"[{entry_id}] ERROR executing predicted SQL: {exc}")
+            results.append(
+                {
+                    **entry,
+                    "predicted_sql": predicted_sql,
+                    "predicted_result": None,
+                    "golden_result": golden_result,
+                    "judge_score": 0.0,
+                    "passed": False,
+                    "error": f"Predicted SQL execution failed: {exc}",
+                }
+            )
+            continue
+
+        try:
+            actual_golden = execute_sql(golden_sql)
+        except Exception as exc:
+            print(f"[{entry_id}] ERROR executing golden SQL: {exc}")
+            actual_golden = golden_result
+
+        passed = str(predicted_result).strip() == str(actual_golden).strip()
+        score = 1.0 if passed else 0.0
+        print(
+            f"[{entry_id}] predicted={predicted_result!r} "
+            f"golden={actual_golden!r}  {'PASS' if passed else 'FAIL'}"
+        )
+        results.append(
+            {
+                **entry,
+                "predicted_sql": predicted_sql,
+                "predicted_result": predicted_result,
+                "golden_result": actual_golden,
+                "judge_score": score,
+                "passed": passed,
+                "error": None,
+            }
+        )
+
+    return results
+
+
 def run() -> None:
     eval_run_id = f"eval-{uuid.uuid4().hex[:8]}"
     print(f"==> Eval run ID:  {eval_run_id}")
 
     experiments = discover_experiments()
-    judge = VLLMJudge()
     all_results: list[dict] = []
     all_passed = True
     now = datetime.now()
+
+    if EVAL_FEATURE == "chat":
+        judge = VLLMJudge()
+    else:
+        judge = None
 
     for experiment_name, dataset_path in experiments:
         print()
@@ -238,7 +393,11 @@ def run() -> None:
         print(f"  Experiment: {experiment_name}  ({dataset_path.name})")
         print(f"{'=' * 72}")
 
-        results = run_experiment(experiment_name, dataset_path, judge, eval_run_id)
+        if EVAL_FEATURE == "alerts":
+            results = run_alert_experiment(experiment_name, dataset_path, eval_run_id)
+        else:
+            results = run_experiment(experiment_name, dataset_path, judge, eval_run_id)
+
         print_summary(experiment_name, results)
         save_results(experiment_name, results, now)
         all_results.extend(results)
@@ -349,6 +508,7 @@ def save_summary(all_results: list[dict], now: datetime) -> None:
 
 if __name__ == "__main__":
     experiments = discover_experiments()
+    print(f"==> Eval feature: {EVAL_FEATURE}")
     print(f"==> Eval dataset: {EVAL_DATASET}")
     print(f"==> Seed SQL:     {SEED_SQL_PATH}")
     print(f"==> Experiments:  {len(experiments)} file(s)")

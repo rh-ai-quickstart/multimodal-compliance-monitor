@@ -16,7 +16,8 @@ help:
 	@echo "  undeploy   - Remove manifests from OpenShift"
 	@echo "  dev-backend - Create venv, install deps, run backend"
 	@echo "  dev-frontend - Install deps and run frontend"
-	@echo "  eval         - Run LLM chat evaluation against the running backend (local)"
+	@echo "  eval         - Run evaluation against the running backend (local)"
+	@echo "                 Use EVAL_FEATURE=alerts to eval alerts (default: chat)"
 	@echo "                 Use EVAL_DATASET=bird to select a dataset (default: ppe)"
 	@echo "  eval-k8s     - Run LLM chat evaluation against the deployed K8s backend (helm test)"
 	@echo "  init-eval-db - Snapshot the running DB into app/evals/db_seed_data.sql"
@@ -52,6 +53,7 @@ HELM_CHART ?= deploy/helm/ppe-compliance-monitor
 # Model serving runtime: "kserve" (GPU/Triton) or "openvino" (CPU/OVMS)
 RUNTIME_TYPE ?= kserve
 LABEL_STUDIO_ENABLED ?=
+EVAL_FEATURE ?= chat
 EVAL_DATASET ?= ppe
 
 check-openai-env:
@@ -150,9 +152,9 @@ undeploy:
 	@if [ -n "$(NAMESPACE)" ]; then oc project "$(NAMESPACE)"; fi
 	@helm uninstall $(HELM_RELEASE) --namespace $(NAMESPACE) 2>/dev/null || echo "Release $(HELM_RELEASE) not found (already uninstalled or never deployed)."
 
-eval: check-openai-env ## Run LLM chat evaluation against the running backend (local).
-	@mkdir -p $(CURDIR)/app/evals/preds
-	EVAL_DATASET=$(EVAL_DATASET) podman-compose -f $(COMPOSE_FILE) --profile eval run --rm --no-deps --build \
+eval: check-openai-env ## Run evaluation against the running backend (local).
+	@mkdir -p $(CURDIR)/app/evals/preds/$(EVAL_FEATURE)
+	EVAL_FEATURE=$(EVAL_FEATURE) EVAL_DATASET=$(EVAL_DATASET) podman-compose -f $(COMPOSE_FILE) --profile eval run --rm --no-deps --build \
 	  -v $(CURDIR)/app/evals/preds:/evals/preds:z,U \
 	  backend-eval
 

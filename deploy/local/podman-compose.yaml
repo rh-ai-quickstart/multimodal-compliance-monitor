@@ -204,6 +204,7 @@ services:
     image: ppe-compliance-monitor-evals:local
     environment:
       BACKEND_URL: "http://backend:8888"
+      EVAL_FEATURE: "${EVAL_FEATURE:-chat}"
       EVAL_DATASET: "${EVAL_DATASET:-ppe}"
       SNAPSHOT_DIR: "/snapshots"
       OPENAI_API_TOKEN: "${OPENAI_API_TOKEN}"

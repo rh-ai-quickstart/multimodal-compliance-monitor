@@ -1,0 +1,122 @@
+[
+  {
+    "id": "alert_01",
+    "rule": "Alert me when cars are detected in the last 15 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'car' AND dt.first_seen >= NOW() - INTERVAL '15 minutes'",
+    "golden_result": "4"
+  },
+  {
+    "id": "alert_02",
+    "rule": "Notify me if any trucks appear in the past 45 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'car' AND dt.first_seen >= NOW() - INTERVAL '45 minutes'",
+    "golden_result": "8"
+  },
+  {
+    "id": "alert_03",
+    "rule": "Alert when buses are detected in the last 2 hours",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'bus' AND dt.first_seen >= NOW() - INTERVAL '2 hours'",
+    "golden_result": "0"
+  },
+  {
+    "id": "alert_04",
+    "rule": "Alert me when motorcycles are spotted in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'motorcycle' AND dt.first_seen >= NOW() - INTERVAL '45 minutes'",
+    "golden_result": "1"
+  },
+  {
+    "id": "alert_05",
+    "rule": "Notify me if cars and trucks are detected in the last 2 hours",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'car' AND dt.first_seen >= NOW() - INTERVAL '2 hours'",
+    "golden_result": "13"
+  },
+  {
+    "id": "alert_06",
+    "rule": "Alert when trucks and buses appear in the past 45 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name IN ('car', 'bus') AND dt.first_seen >= NOW() - INTERVAL '45 minutes'",
+    "golden_result": "8"
+  },
+  {
+    "id": "alert_07",
+    "rule": "Alert me if cars or motorcycles are detected in the last 15 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name IN ('car', 'motorcycle') AND dt.first_seen >= NOW() - INTERVAL '15 minutes'",
+    "golden_result": "4"
+  },
+  {
+    "id": "alert_08",
+    "rule": "Notify when any vehicles are detected in the last 2 hours",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name IN ('car', 'bus', 'motorcycle') AND dt.first_seen >= NOW() - INTERVAL '2 hours'",
+    "golden_result": "14"
+  },
+  {
+    "id": "alert_09",
+    "rule": "Alert me if any vehicles appear in the past 45 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name IN ('car', 'bus', 'motorcycle') AND dt.first_seen >= NOW() - INTERVAL '45 minutes'",
+    "golden_result": "9"
+  },
+  {
+    "id": "alert_10",
+    "rule": "Alert me when trains are detected in the last 2 hours",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'car' AND dt.first_seen >= NOW() - INTERVAL '2 hours'",
+    "golden_result": "13"
+  },
+  {
+    "id": "alert_11",
+    "rule": "Notify when bicycles appear in the past 45 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'car' AND dt.first_seen >= NOW() - INTERVAL '45 minutes'",
+    "golden_result": "8"
+  },
+  {
+    "id": "alert_12",
+    "rule": "Alert me if cars are detected in the last 2 hours",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'car' AND dt.first_seen >= NOW() - INTERVAL '2 hours'",
+    "golden_result": "13"
+  },
+  {
+    "id": "alert_13",
+    "rule": "Notify when trucks are seen in the last 15 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'car' AND dt.first_seen >= NOW() - INTERVAL '15 minutes'",
+    "golden_result": "4"
+  },
+  {
+    "id": "alert_14",
+    "rule": "Alert when cars, trucks, and buses are detected in the past 2 hours",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name IN ('car', 'bus') AND dt.first_seen >= NOW() - INTERVAL '2 hours'",
+    "golden_result": "13"
+  },
+  {
+    "id": "alert_15",
+    "rule": "Alert me when motorcycles or buses appear in the last 2 hours",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name IN ('motorcycle', 'bus') AND dt.first_seen >= NOW() - INTERVAL '2 hours'",
+    "golden_result": "1"
+  },
+  {
+    "id": "alert_16",
+    "rule": "Notify me when automobiles are detected in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'car' AND dt.first_seen >= NOW() - INTERVAL '45 minutes'",
+    "golden_result": "8"
+  },
+  {
+    "id": "alert_17",
+    "rule": "Alert when big rigs show up in the past 2 hours",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'car' AND dt.first_seen >= NOW() - INTERVAL '2 hours'",
+    "golden_result": "13"
+  },
+  {
+    "id": "alert_18",
+    "rule": "Notify me if motorbikes are spotted in the last 15 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'motorcycle' AND dt.first_seen >= NOW() - INTERVAL '15 minutes'",
+    "golden_result": "0"
+  },
+  {
+    "id": "alert_19",
+    "rule": "Alert when vehicle traffic is detected in the last 15 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name IN ('car', 'bus', 'motorcycle') AND dt.first_seen >= NOW() - INTERVAL '15 minutes'",
+    "golden_result": "4"
+  },
+  {
+    "id": "alert_20",
+    "rule": "Notify me if heavy vehicles are detected in the last 45 minutes",
+    "golden_sql": "SELECT COUNT(DISTINCT dt.track_id) FROM detection_tracks dt JOIN detection_classes dc ON dc.id = dt.detection_classes_id WHERE dc.app_config_id = 3 AND dc.name = 'bus' AND dt.first_seen >= NOW() - INTERVAL '45 minutes'",
+    "golden_result": "0"
+  }
+]
