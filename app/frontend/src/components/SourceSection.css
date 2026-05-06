@@ -155,6 +155,235 @@
   filter: brightness(1.08);
 }
 
+.source-alerts {
+  border-top: 1px solid #2c3857;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.source-alerts-title {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #d9e9ff;
+}
+
+.source-alerts-subtitle {
+  margin: 0;
+  font-size: 0.74rem;
+  color: #90a6d1;
+}
+
+.source-alerts-source {
+  font-size: 0.72rem;
+  color: #b7c8ea;
+  background: rgba(24, 35, 58, 0.55);
+  border: 1px solid #2f4366;
+  border-radius: 8px;
+  padding: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.source-alerts-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.source-alerts-textarea {
+  min-height: 88px;
+  resize: vertical;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid #304160;
+  background-color: #121a2b;
+  color: #e6efff;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  font-family: inherit;
+}
+
+.source-alerts-textarea:focus {
+  outline: none;
+  border-color: #4d8fff;
+  box-shadow: 0 0 0 3px rgba(77, 143, 255, 0.18);
+}
+
+.source-alerts-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.source-alerts-severity {
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.source-alerts-submit {
+  border: 1px solid #4f78c6;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #335ea8 0%, #518df2 100%);
+  color: #eef5ff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.source-alerts-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.source-alerts-error {
+  border: 1px solid #7f2a32;
+  color: #ffd5d9;
+  background: rgba(96, 21, 30, 0.45);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 0.76rem;
+}
+
+.source-alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.source-alerts-list-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #9db2d9;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.source-alerts-empty {
+  border: 1px dashed #304160;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.77rem;
+  color: #899cc3;
+  background: rgba(13, 19, 34, 0.45);
+}
+
+.source-alert-card {
+  border: 1px solid #304160;
+  border-radius: 10px;
+  background: rgba(11, 18, 32, 0.66);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.source-alert-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.source-alert-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.source-alert-badge,
+.source-alert-status {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.source-alert-badge-low {
+  background: rgba(74, 147, 255, 0.2);
+  color: #9fc8ff;
+}
+
+.source-alert-badge-medium {
+  background: rgba(243, 194, 72, 0.2);
+  color: #ffd986;
+}
+
+.source-alert-badge-high {
+  background: rgba(226, 88, 88, 0.24);
+  color: #ffaaaa;
+}
+
+.source-alert-status-processing {
+  background: rgba(74, 147, 255, 0.2);
+  color: #9fc8ff;
+}
+
+.source-alert-status-done {
+  background: rgba(60, 175, 107, 0.2);
+  color: #98f0b6;
+}
+
+.source-alert-status-error {
+  background: rgba(226, 88, 88, 0.24);
+  color: #ffaaaa;
+}
+
+.source-alert-rule {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #d8e7ff;
+}
+
+.source-alert-result {
+  margin: 0;
+  font-size: 0.73rem;
+  color: #9eb6de;
+}
+
+.source-alert-error {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #ffb2b8;
+}
+
+.source-alert-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.source-alert-btn {
+  border: 1px solid #38517c;
+  border-radius: 8px;
+  background: rgba(38, 58, 92, 0.65);
+  color: #dfeaff;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.source-alert-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.source-alert-btn-primary {
+  border-color: #4f78c6;
+  background: linear-gradient(135deg, #335ea8 0%, #4f88ea 100%);
+}
+
+.source-alert-btn-danger {
+  border-color: #88424a;
+  background: rgba(121, 48, 59, 0.5);
+  color: #ffd5d9;
+}
+
 @media (max-width: 1024px) {
   .source-section-title {
     font-size: 14px;

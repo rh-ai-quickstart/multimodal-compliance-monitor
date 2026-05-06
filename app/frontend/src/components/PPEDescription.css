@@ -21,30 +21,32 @@
 }
 
 .description-section {
-    background-color: #0066cc; /* Blue background for Latest Detection */
+    background-color: #0066cc;
 }
 
 .summary-section {
-    background-color: #ff0000; /* Yellow background for Safety Trends */
+    background-color: #0e1828;
+    border: 1px solid rgba(94, 132, 196, 0.3);
     flex-grow: 1;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
 }
 
-h3 {
+.summary-section h3 {
+    color: #d0e0ff;
     font-size: clamp(1rem, 1.1vw, 1.2rem);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     padding-bottom: 5px;
-    border-bottom: 2px solid #ffffff;
+    border-bottom: 2px solid rgba(91, 156, 248, 0.4);
 }
 
 .description-section h3 {
     color: #ffffff;
-}
-
-.summary-section h3 {
-    color: #000000;
+    font-size: clamp(1rem, 1.1vw, 1.2rem);
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #ffffff;
 }
 
 .detection-info {
@@ -60,20 +62,23 @@ h3 {
     box-sizing: border-box;
 }
 
+/* --- Unified safety feed (trends + alerts) --- */
+
 .summary-feed {
     flex-grow: 1;
     overflow-y: auto;
-    padding-right: 10px; /* Add some padding for the scrollbar */
+    padding-right: 6px;
     box-sizing: border-box;
     min-width: 0;
 }
 
 .safety-trends {
-    background-color: rgba(0, 0, 0, 0.1);
-    border: 1px solid #000000;
-    border-radius: 4px;
-    padding: 15px;
-    margin-bottom: 10px;
+    background-color: rgba(100, 140, 200, 0.1);
+    border: 1px solid rgba(100, 140, 200, 0.25);
+    border-left: 4px solid rgba(100, 140, 200, 0.4);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
     transition: all 0.3s ease;
     box-sizing: border-box;
     width: 100%;
@@ -85,35 +90,102 @@ h3 {
     white-space: pre-wrap;
     word-break: break-word;
     font-family: monospace;
-    font-size: 0.9em;
-    color: #000000;
+    font-size: 0.85em;
+    color: #c0d4f0;
+    line-height: 1.4;
 }
 
 .current-summary {
-    border-color: #000000;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    border-color: rgba(91, 156, 248, 0.5);
+    border-left-color: rgba(91, 156, 248, 0.8);
+    background-color: rgba(91, 156, 248, 0.12);
+}
+
+.current-summary pre {
+    color: #e0ecff;
+}
+
+/* Alert findings -- warnings */
+.safety-trends--alert {
+    background-color: rgba(232, 93, 93, 0.1);
+    border-color: rgba(232, 93, 93, 0.3);
+}
+
+.safety-trends--alert pre {
+    color: #ffd4d4;
+    font-weight: 600;
+}
+
+.safety-trends--high {
+    border-left-color: #e85d5d;
+    background-color: rgba(232, 93, 93, 0.15);
+}
+
+.safety-trends--medium {
+    border-left-color: #f3c248;
+    background-color: rgba(243, 194, 72, 0.1);
+    border-color: rgba(243, 194, 72, 0.3);
+}
+
+.safety-trends--medium pre {
+    color: #ffe8a8;
+}
+
+.safety-trends--low {
+    border-left-color: #5b9cf8;
+    background-color: rgba(91, 156, 248, 0.1);
+    border-color: rgba(91, 156, 248, 0.3);
+}
+
+.safety-trends--low pre {
+    color: #bdd8ff;
+}
+
+/* All-clear alerts */
+.safety-trends--clear {
+    border-left-color: #4ade80;
+    background-color: rgba(74, 222, 128, 0.08);
+    border-color: rgba(74, 222, 128, 0.25);
+}
+
+.safety-trends--clear pre {
+    color: #a8f0c0;
+}
+
+/* Processing alerts */
+.safety-trends--processing {
+    border-left-color: #7ba4d8;
+    background-color: rgba(123, 164, 216, 0.08);
+    border-color: rgba(123, 164, 216, 0.25);
+    opacity: 0.8;
+}
+
+.safety-trends--processing pre {
+    color: #a4c4e8;
+    font-style: italic;
 }
 
 /* Scrollbar styling */
 .summary-feed::-webkit-scrollbar,
 .detection-info::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
 }
 
 .summary-feed::-webkit-scrollbar-track,
 .detection-info::-webkit-scrollbar-track {
-    background: #ffd700;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
 }
 
 .summary-feed::-webkit-scrollbar-thumb,
 .detection-info::-webkit-scrollbar-thumb {
-    background: #000000;
-    border-radius: 4px;
+    background: rgba(160, 180, 220, 0.3);
+    border-radius: 3px;
 }
 
 .summary-feed::-webkit-scrollbar-thumb:hover,
 .detection-info::-webkit-scrollbar-thumb:hover {
-    background: #333333;
+    background: rgba(160, 180, 220, 0.5);
 }
 
 @media (max-width: 640px) {

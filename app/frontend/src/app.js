@@ -67,7 +67,7 @@ function Dashboard() {
         </aside>
         <main className="main-column">
           <VideoPlayer hasSource={activeConfigId != null} activeConfigId={activeConfigId} />
-          <PPEDescription />
+          <PPEDescription activeConfigId={activeConfigId} />
         </main>
         <aside className="chat-column">
           <ChatBot activeConfigId={activeConfigId} />

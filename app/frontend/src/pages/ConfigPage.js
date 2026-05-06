@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL } from '../config';
 import LogoBar from '../components/LogoBar';
+import AlertPanel from '../components/AlertPanel';
 import './ConfigPage.css';
 
 function validateClasses(value) {
@@ -353,6 +354,7 @@ const ConfigPage = () => {
                       {classesJson || '{}'}
                     </pre>
                   </div>
+                  <AlertPanel configId={viewedSource.id} />
                   <div className="cfg-form-actions">
                     <button type="button" className="cfg-btn-secondary" onClick={backToList}>
                       Close

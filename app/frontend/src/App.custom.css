@@ -95,50 +95,7 @@ body, html {
   object-fit: contain;
 }
 
-/* Adjustments for Safety Trends */
-.safety-trends {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px;
-}
-
-.safety-trend-card {
-  flex: 1 1 calc(33% - 20px);
-  min-width: 250px;
-  background-color: #FF0000; /* Bright red */
-  /* or */
-  /* background-color: #8B0000; /* Dark red */
-  margin-bottom: 15px;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1);
-}
-
-.safety-trend-card h3 {
-  margin-top: 0;
-  color: #ffffff;
-  font-size: 1.2em;
-  margin-bottom: 10px;
-}
-
-/* Ensure content inside safety trend cards doesn't overflow */
-.safety-trend-card > div {
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.safety-trend-card-content {
-  color: #e0e0e0;
-  font-size: 1em;
-  line-height: 1.4;
-}
-
-/* Add this new style at the end of your CSS file */
-.content-wrapper .safety-trends .safety-trend-card {
-  background-color: #FF0000 !important; /* Bright red */
-}
+/* Safety Trends styles are now in PPEDescription.css */
 
 .stream-sync-indicator {
   color: #9dc7ff;
