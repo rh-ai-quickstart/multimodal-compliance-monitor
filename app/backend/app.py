@@ -1,7 +1,9 @@
 from flask import Flask, Response, request, jsonify, Blueprint
 from flask_cors import CORS
+import asyncio
 import json
 import os
+import uuid
 
 # import cv2
 # import time
@@ -15,9 +17,12 @@ from minio_client import (
     object_exists,
 )
 
+from alert import LLMAlert
+from alert.state import AlertEntry, AlertsStore
 from chat import LLMChat
 from database import (
     count_app_configs,
+    execute_query,
     get_all_configs,
     get_classes_for_config,
     get_config_by_id,
@@ -54,6 +59,8 @@ if count_app_configs() == 0:
     insert_demo_configs()
 log.info("VideoHandler initialized (video source selected from UI)")
 
+alerts = AlertsStore()
+llm_alert = LLMAlert()
 llm_chat = LLMChat()
 
 latest_description = "Initializing..."
@@ -166,6 +173,94 @@ def chat_reset():
     llm_chat.clear_history(session_id)
     log.info("chat_reset: cleared session %r", session_id)
     return jsonify({"message": "Session cleared"})
+
+
+@api.route("/alerts", methods=["POST"])
+def create_alert():
+    """Create an alert from an English rule, run the LLM pipeline, return the result.
+
+    JSON body parameters:
+        rule (str): The plain-English alert rule to convert into SQL.
+        app_config_id (int): The app configuration to scope the alert to.
+        severity (str): Alert severity — "low", "medium", or "high". Defaults to "medium".
+    """
+    data = request.get_json(silent=True) or {}
+    rule = (data.get("rule") or "").strip()
+    if not rule:
+        return jsonify({"error": "Field 'rule' is required."}), 400
+
+    severity = data.get("severity", "medium")
+    if severity not in ("low", "medium", "high"):
+        return jsonify({"error": "severity must be 'low', 'medium', or 'high'."}), 400
+
+    app_config_id = data.get("app_config_id")
+    if app_config_id is None:
+        return jsonify({"error": "Field 'app_config_id' is required."}), 400
+    try:
+        app_config_id = int(app_config_id)
+    except (ValueError, TypeError):
+        return jsonify({"error": "app_config_id must be an integer"}), 400
+
+    classes_info = None
+    raw = get_classes_for_config(app_config_id)
+    if raw:
+        classes_info = [
+            {"name": v["name"], "trackable": v["trackable"]} for v in raw.values()
+        ]
+
+    alert_id = str(uuid.uuid4())
+    entry = AlertEntry(
+        id=alert_id,
+        app_config_id=app_config_id,
+        rule=rule,
+        severity=severity,
+        status="processing",
+    )
+    alerts.configs.setdefault(app_config_id, {})[alert_id] = entry
+
+    try:
+        sql_query = llm_alert.create_alert(
+            alert_text=rule,
+            app_config_id=app_config_id,
+            classes_info=classes_info,
+        )
+        entry.sql_query = sql_query
+        entry.status = "done"
+    except Exception as e:
+        log.exception(f"Alert pipeline failed for {alert_id}: {e}")
+        entry.status = "error"
+        entry.error = str(e)
+        return jsonify({"error": f"Alert pipeline failed: {e}"}), 500
+
+    return jsonify(entry.model_dump()), 201
+
+
+@api.route("/alerts/<int:app_config_id>", methods=["GET"])
+def get_alerts(app_config_id):
+    """Return all alerts for an app_config_id with live SQL query results.
+
+    Path parameters:
+        app_config_id (int): The app configuration whose alerts to retrieve.
+    """
+    entries = list(alerts.configs.get(app_config_id, {}).values())
+
+    async def _fetch_results():
+        async def _query_one(entry: AlertEntry) -> dict:
+            alert_data = entry.model_dump()
+            if entry.sql_query and entry.status == "done":
+                try:
+                    alert_data["result"] = await asyncio.to_thread(
+                        execute_query, entry.sql_query
+                    )
+                except Exception as e:
+                    entry.error = str(e)
+                    alert_data["error"] = str(e)
+            return alert_data
+
+        return list(await asyncio.gather(*[_query_one(e) for e in entries]))
+
+    results = asyncio.run(_fetch_results())
+    return jsonify(results)
 
 
 def _parse_classes(value: str | dict) -> tuple[dict, list[tuple[int, str, bool, bool]]]:
