@@ -7,6 +7,12 @@ const renderAlertResult = (result) => {
   if (!result) return 'No data yet.';
   if (typeof result === 'number') return `Matches: ${result}`;
   if (Array.isArray(result)) {
+    if (result.length === 1 && typeof result[0] === 'object' && result[0] !== null) {
+      const vals = Object.values(result[0]);
+      if (vals.length === 1 && typeof vals[0] === 'number') {
+        return vals[0] === 0 ? 'No matches returned.' : `Matches: ${vals[0]}`;
+      }
+    }
     return result.length ? `Matches: ${result.length}` : 'No matches returned.';
   }
   if (typeof result === 'object') {

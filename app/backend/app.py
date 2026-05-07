@@ -98,6 +98,8 @@ def latest_info():
         (video_handler.video_source or "")[:200] if video_handler.video_source else ""
     )
 
+    alert_results = _evaluate_alerts(_cfg) if _cfg is not None else []
+
     return jsonify(
         {
             "description": desc,
@@ -105,6 +107,7 @@ def latest_info():
             "inference_ready": True,
             "active_config_id": _cfg,
             "video_source": _video,
+            "alerts": alert_results,
         }
     )
 
@@ -235,16 +238,13 @@ def create_alert():
     return jsonify(entry.model_dump()), 201
 
 
-@api.route("/alerts/<int:app_config_id>", methods=["GET"])
-def get_alerts(app_config_id):
-    """Return all alerts for an app_config_id with live SQL query results.
-
-    Path parameters:
-        app_config_id (int): The app configuration whose alerts to retrieve.
-    """
+def _evaluate_alerts(app_config_id: int) -> list[dict]:
+    """Run each alert's SQL query and return dicts with live results."""
     entries = list(alerts.configs.get(app_config_id, {}).values())
+    if not entries:
+        return []
 
-    async def _fetch_results():
+    async def _fetch():
         async def _query_one(entry: AlertEntry) -> dict:
             alert_data = entry.model_dump()
             if entry.sql_query and entry.status == "done":
@@ -259,8 +259,17 @@ def get_alerts(app_config_id):
 
         return list(await asyncio.gather(*[_query_one(e) for e in entries]))
 
-    results = asyncio.run(_fetch_results())
-    return jsonify(results)
+    return asyncio.run(_fetch())
+
+
+@api.route("/alerts/<int:app_config_id>", methods=["GET"])
+def get_alerts(app_config_id):
+    """Return all alerts for an app_config_id with live SQL query results.
+
+    Path parameters:
+        app_config_id (int): The app configuration whose alerts to retrieve.
+    """
+    return jsonify(_evaluate_alerts(app_config_id))
 
 
 @api.route("/alerts/<int:app_config_id>/<string:alert_id>", methods=["PATCH"])
