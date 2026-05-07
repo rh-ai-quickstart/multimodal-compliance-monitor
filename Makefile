@@ -8,9 +8,9 @@ help:
 	@echo "  build      - Build container image"
 	@echo "  push       - Push container image"
 	@echo "  build-push-data - Build and push data container image (video + models)"
-	@echo "  deploy     - Deploy to OpenShift with GPU runtime (default)"
-	@echo "  deploy-gpu - Deploy with GPU runtime (kserve/Triton) - same as deploy"
-	@echo "  deploy-openvino - Deploy with CPU runtime (OpenVINO Model Server)"
+	@echo "  deploy     - Deploy to OpenShift with OpenVINO CPU runtime (default)"
+	@echo "  deploy-gpu - Deploy with GPU runtime (kserve/Triton)"
+	@echo "  deploy-openvino - Deploy with CPU runtime (OpenVINO Model Server) - same as deploy"
 	@echo "  deploy-openvino-labelstudio - Deploy OpenVINO runtime with Label Studio enabled"
 	@echo "  deploy-labelstudio - Deploy and enable Label Studio"
 	@echo "  undeploy   - Remove manifests from OpenShift"
@@ -49,8 +49,8 @@ BACKEND_DIR ?= app/backend
 FRONTEND_DIR ?= app/frontend
 HELM_RELEASE ?= ppe-compliance-monitor
 HELM_CHART ?= deploy/helm/ppe-compliance-monitor
-# Model serving runtime: "kserve" (GPU/Triton) or "openvino" (CPU/OVMS)
-RUNTIME_TYPE ?= kserve
+# Model serving runtime: "openvino" (CPU/OVMS) or "kserve" (GPU/Triton)
+RUNTIME_TYPE ?= openvino
 LABEL_STUDIO_ENABLED ?=
 EVAL_DATASET ?= ppe
 
@@ -134,7 +134,7 @@ deploy: check-openai-env
 	helm upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
 		--namespace $(NAMESPACE) --create-namespace $$helm_args
 
-deploy-gpu: ## Deploy with GPU runtime (kserve/Triton) - same as default deploy
+deploy-gpu: ## Deploy with GPU runtime (kserve/Triton)
 	$(MAKE) deploy RUNTIME_TYPE=kserve
 
 deploy-openvino: ## Deploy with CPU runtime (OpenVINO Model Server)
