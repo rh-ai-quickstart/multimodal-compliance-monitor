@@ -372,9 +372,6 @@ class VideoHandler:
                 sleep_time = frame_interval - elapsed
                 if sleep_time > 0:
                     time.sleep(sleep_time)
-                # log.info(
-                #     f"Time elapsed: {elapsed * 1000:.2f} ms, Sleeping for {sleep_time * 1000:.2f} ms"
-                # )
 
                 last_yield_time = time.perf_counter()
 
@@ -389,6 +386,13 @@ class VideoHandler:
 
         except Exception as e:
             log.exception(f"Video feed: exception in stream loop: {e}")
+        finally:
+            if self._epoch == current_epoch and self._is_streaming:
+                log.info(
+                    "Video feed: generator closed, stopping stream (epoch=%d)",
+                    current_epoch,
+                )
+                self.stop_streaming()
 
     def get_majority_description(self) -> str:
         """Return the most common description among the last K frames."""
