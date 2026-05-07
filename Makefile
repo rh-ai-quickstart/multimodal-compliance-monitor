@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help local-up local-build-up local-down build push deploy deploy-gpu deploy-openvino deploy-openvino-labelstudio deploy-labelstudio undeploy dev-backend dev-frontend local-build build-push-data kill-ports check-openai-env eval eval-k8s init-eval-db
+.PHONY: help local-up local-build-up local-down build push deploy deploy-cpu deploy-gpu deploy-openvino-labelstudio deploy-labelstudio undeploy dev-backend dev-frontend local-build build-push-data kill-ports check-openai-env eval eval-k8s init-eval-db
 help:
 	@echo "Available targets:"
 	@echo "  local-up   - Start local stack with Podman Compose"
@@ -9,8 +9,8 @@ help:
 	@echo "  push       - Push container image"
 	@echo "  build-push-data - Build and push data container image (video + models)"
 	@echo "  deploy     - Deploy to OpenShift with OpenVINO CPU runtime (default)"
+	@echo "  deploy-cpu - Deploy with CPU runtime (OpenVINO Model Server)"
 	@echo "  deploy-gpu - Deploy with GPU runtime (kserve/Triton)"
-	@echo "  deploy-openvino - Deploy with CPU runtime (OpenVINO Model Server) - same as deploy"
 	@echo "  deploy-openvino-labelstudio - Deploy OpenVINO runtime with Label Studio enabled"
 	@echo "  deploy-labelstudio - Deploy and enable Label Studio"
 	@echo "  undeploy   - Remove manifests from OpenShift"
@@ -137,7 +137,7 @@ deploy: check-openai-env
 deploy-gpu: ## Deploy with GPU runtime (kserve/Triton)
 	$(MAKE) deploy RUNTIME_TYPE=kserve
 
-deploy-openvino: ## Deploy with CPU runtime (OpenVINO Model Server)
+deploy-cpu: ## Deploy with CPU runtime (OpenVINO Model Server)
 	$(MAKE) deploy RUNTIME_TYPE=openvino
 
 deploy-openvino-labelstudio: ## Deploy OpenVINO runtime with Label Studio enabled
