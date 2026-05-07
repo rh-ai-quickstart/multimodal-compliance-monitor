@@ -11,10 +11,10 @@ backend:
   corsOrigins: ""
   resources:
     requests:
-      cpu: 250m
-      memory: 512Mi
+      cpu: "1400m"
+      memory: 2500Mi
     limits:
-      cpu: "1"
+      cpu: "2"
       memory: 4Gi
   # Config storage: MinIO (config bucket) when enabled - enables horizontal scaling
   configStorage:
