@@ -51,15 +51,15 @@ This AI quickstart provides a complete multimodal monitoring solution that combi
 - **Model customization**: Train and deploy custom object detection models using the included Jupyter notebook workflow
 - **Annotation support**: Optional Label Studio integration for creating and refining training datasets
 
-### See it in action
-
-[Interactive walkthrough](https://interact.redhat.com/share/WLiZJXMoQn2x9fGdNY0P)
-
 Upload a video or connect an RTSP stream to see the AI detection in action. The dashboard displays:
 - Live video feed with bounding boxes around detected objects
 - Real-time safety and operational summaries
 - Object tracking across frames
 - Interactive chat for querying detection history
+
+### See it in action
+
+[Interactive walkthrough](https://interact.redhat.com/share/WLiZJXMoQn2x9fGdNY0P)
 
 
 ### Architecture diagrams
