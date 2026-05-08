@@ -1,18 +1,17 @@
 <!-- omit from toc -->
-# Multimodal monitoring with video analytics and AI-assisted insights
+# Deploy AI-powered video analytics for workplace safety
 
-This repository contains a Flask backend that performs object detection on a video
-stream and a React frontend that visualizes the results and provides a chat UI.
+Monitor workplace safety and operational compliance in real time using AI object detection, multimodal analysis, and conversational insights. 
 
 <!-- omit from toc -->
 ## Table of Contents
 - [Detailed description](#detailed-description)
-- [Architecture](#architecture)
+  - [See it in action](#see-it-in-action)
   - [Architecture diagrams](#architecture-diagrams)
-  - [Video Upload Workflow](#video-upload-workflow)
-  - [Application Workflow](#application-workflow)
+  - [Video upload workflow](#video-upload-workflow)
+  - [Application workflow](#application-workflow)
   - [Components](#components)
-  - [Storage Strategy](#storage-strategy)
+  - [Storage strategy](#storage-strategy)
 - [Requirements](#requirements)
   - [Minimum hardware expectations](#minimum-hardware-expectations)
   - [Minimum software requirements](#minimum-software-requirements)
@@ -24,33 +23,42 @@ stream and a React frontend that visualizes the results and provides a chat UI.
   - [Installation steps](#installation-steps)
   - [Deployment workflow](#deployment-workflow)
   - [Helm values](#helm-values)
-  - [Undeploy](#undeploy)
-  - [Local Development (Podman Compose)](#local-development-podman-compose)
-  - [Local Development (No Containers)](#local-development-no-containers)
-- [Training a Custom Model](#training-a-custom-model)
-- [API Endpoints](#api-endpoints)
+  - [Delete](#delete)
+  - [Local development (Podman Compose)](#local-development-podman-compose)
+  - [Local development (no containers)](#local-development-no-containers)
+- [Training a custom model](#training-a-custom-model)
+- [API endpoints](#api-endpoints)
   - [Example request](#example-request)
+- [Reference](#reference)
 - [Tags](#tags)
 
 
 ## Detailed description
 
-The application uses trained object-detection models to analyze live video
-streams and uploaded video files. In the UI, users can monitor live RTSP feeds
-or select MP4 sources from thumbnails, and selecting a source activates its
-associated configuration. The backend then switches to the model tied to that
-selected source, runs inference on the stream, and returns detection results
-and safety and operational summaries in real time.
+Organizations face challenges maintaining workplace safety and operational compliance across facilities with multiple video feeds. Manual monitoring is resource-intensive and reactive, often missing critical events or patterns that indicate safety risks or operational inefficiencies.
 
-With this demo you can:
+This AI quickstart provides a complete multimodal monitoring solution that combines computer vision and large language models (LLMs) to analyze video streams in real time. The application uses trained object-detection models to identify objects, people, and events in live RTSP feeds or uploaded video files. Users can monitor multiple video sources through an interactive dashboard, view detection overlays, and ask questions about what the AI has observed using a conversational chat interface.
 
-- Run **live RTSP** or **MP4** sources with per-source configuration and model selection
-- Upload videos via the config flow and persist sources backed by **MinIO** and **PostgreSQL**
-- View **detections**, overlays, and summaries through the React dashboard
-- Use the **chat UI** with an OpenAI-compatible LLM (LangGraph / LangChain) and optional SQL-backed tools
-- Deploy locally (**Podman Compose** or bare-metal dev) or to **Kubernetes/OpenShift** with **Triton/KServe** or **OpenVINO Model Server**, optionally with **Label Studio**
+**Key capabilities:**
 
-## Architecture
+- **Real-time analysis**: Process live RTSP streams or MP4 files with per-source configuration and model selection
+- **Persistent storage**: Upload and manage video sources backed by MinIO object storage and PostgreSQL database
+- **Visual monitoring**: View detection results, overlays, and automated safety summaries through a React dashboard
+- **Conversational insights**: Query the system using an OpenAI-compatible LLM with LangGraph/LangChain and optional SQL-backed tools
+- **Flexible deployment**: Run locally with Podman Compose, bare-metal development, or deploy to Kubernetes/OpenShift with Triton/KServe or OpenVINO Model Server
+- **Model customization**: Train and deploy custom object detection models using the included Jupyter notebook workflow
+- **Annotation support**: Optional Label Studio integration for creating and refining training datasets
+
+### See it in action
+
+[Interactive walkthrough](https://interact.redhat.com/share/WLiZJXMoQn2x9fGdNY0P)
+
+Upload a video or connect an RTSP stream to see the AI detection in action. The dashboard displays:
+- Live video feed with bounding boxes around detected objects
+- Real-time safety and operational summaries
+- Object tracking across frames
+- Interactive chat for querying detection history
+
 
 ### Architecture diagrams
 
@@ -69,29 +77,29 @@ Static overview (SVG): [`docs/images/architecture.svg`](docs/images/architecture
 | **Prep / seed** | yolo-model-prep (local), data-loader (init) | Export/build model repo from `app/models/*.pt`; seed MinIO |
 | **Annotation (optional)** | Label Studio | Same PostgreSQL + MinIO stack |
 
-### Video Upload Workflow
+### Video upload workflow
 
-[![Video upload workflow](docs/images/video-upload-workflow.png)](docs/images/video-upload-workflow-large.png)
+[![Video upload workflow diagram showing the process from user upload through MinIO storage to database persistence](docs/images/video-upload-workflow.png)](docs/images/video-upload-workflow-large.png)
 
-### Application Workflow
+### Application workflow
 
-[![Application workflow](docs/images/application-workflow.png)](docs/images/application-workflow-large.png)
+[![Application workflow diagram showing the real-time inference pipeline from video source through model serving to UI display](docs/images/application-workflow.png)](docs/images/application-workflow-large.png)
 
 ### Components
 
-- **Backend** (Flask, OpenCV): video decode, MJPEG output, and drawn overlays; **inference** over gRPC to **OpenVINO Model Server** (`ovmsclient`, local/CPU) or **Triton** via `tritonclient` (KServe / GPU path); **multi-object tracking** with **BoxMOT** (BoostTrack++); **PostgreSQL** for app configs, classes, tracks, and observations; **MinIO** for object storage; **LLM chat** with **LangGraph** / **LangChain** (OpenAI-compatible API) and optional read-only **postgres-mcp** for SQL tools; optional **Arize Phoenix** for tracing
-- **Frontend** (React, React Router, Axios): dashboard, source selection (RTSP / MP4 thumbnails), configuration page, and chat with Markdown rendering
-- **OpenVINO Model Server (OVMS)**: model serving; local stack also runs **yolo-model-prep** (Ultralytics-based export) to build the model repo from `app/models/*.pt` before OVMS starts
+- **Backend** (Flask, OpenCV): Video decode, MJPEG output, and drawn overlays; inference over gRPC to OpenVINO Model Server (`ovmsclient`, local/CPU) or Triton via `tritonclient` (KServe / GPU path); multi-object tracking with BoxMOT (BoostTrack++); PostgreSQL for app configs, classes, tracks, and observations; MinIO for object storage; LLM chat with LangGraph / LangChain (OpenAI-compatible API) and optional read-only postgres-mcp for SQL tools; optional Arize Phoenix for tracing
+- **Frontend** (React, React Router, Axios): Dashboard, source selection (RTSP / MP4 thumbnails), configuration page, and chat with Markdown rendering
+- **OpenVINO Model Server (OVMS)**: Model serving runtime; local stack also runs yolo-model-prep (Ultralytics-based export) to build the model repo from `app/models/*.pt` before OVMS starts
 - **MinIO**: S3-compatible object storage for models, videos, uploads, and config-related objects
-- **PostgreSQL**: durable storage for multi-source configs and tracking data
-- **Data Loader**: init container that seeds model and video objects into MinIO
-- **Label Studio** (optional): annotation UI using the same PostgreSQL and MinIO stack
+- **PostgreSQL**: Durable storage for multi-source configs and tracking data
+- **Data loader**: Init container that seeds model and video objects into MinIO
+- **Label Studio** (optional): Annotation UI using the same PostgreSQL and MinIO stack
 
-### Storage Strategy
+### Storage strategy
 
 All models and video files are stored in MinIO rather than baked into container images:
 
-| Deployment | Storage Method |
+| Deployment | Storage method |
 |------------|----------------|
 | OpenShift/K8s | Files downloaded from MinIO to PVC by init container |
 | Local (Podman) | Files downloaded from MinIO at runtime via Python client |
@@ -230,15 +238,17 @@ OpenShift-specific options are included in the chart:
 - NetworkPolicy: `openshift.networkPolicy.enabled`
 - SCC/RoleBinding: `openshift.scc.enabled`, `openshift.scc.name`, `openshift.roleBinding.*`
 
-### Undeploy
+### Delete
+
+Remove the deployed application from your cluster:
 
 ```bash
 make undeploy NAMESPACE=<your-namespace>
 ```
 
-### Local Development (Podman Compose)
+### Local development (Podman Compose)
 
-#### Build and Run
+#### Build and run
 
 ```bash
 make local-build-up
@@ -251,7 +261,7 @@ This starts:
 4. **frontend** - React app (port 3000)
 5. **Label Studio** - Annotation UI backed by the same PostgreSQL + MinIO stack (port 8082)
 
-#### Run Without Rebuild
+#### Run without rebuild
 
 ```bash
 make local-up
@@ -270,7 +280,7 @@ make local-down
 - MinIO Console: http://localhost:9001 (login: `minioadmin` / `minioadmin`)
 - Label Studio: http://localhost:8082
 
-### Local Development (No Containers)
+### Local development (no containers)
 
 #### Backend
 
@@ -286,7 +296,7 @@ Note: Requires model and video files in `app/models/` and `app/data/` directorie
 make dev-frontend
 ```
 
-## Training a Custom Model
+## Training a custom model
 
 To train a YOLO model for badge detection (or other object classes) using your own images:
 
@@ -302,9 +312,9 @@ To train a YOLO model for badge detection (or other object classes) using your o
    ```
    Then open `yolo_training.ipynb` and run the cells in order.
 
-The `training/` folder includes an example dataset and a [detailed README](training/README.md) with the full training process, notebook steps, and dataset requirements.
+The `training/` folder includes an example dataset. See the [detailed training README](training/README.md) for the full training process, notebook steps, and dataset requirements.
 
-## API Endpoints
+## API endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -316,14 +326,30 @@ The `training/` folder includes an example dataset and a [detailed README](train
 
 ### Example request
 
-```
+```bash
 curl -X POST http://localhost:8888/ask_question \
   -H 'Content-Type: application/json' \
   -d '{"question": "How many people are detected?"}'
 ```
 
+## Reference
+
+### Related resources
+
+- [Ultralytics YOLO](https://docs.ultralytics.com/) - Object detection model framework
+- [OpenVINO Model Server](https://docs.openvino.ai/latest/ovms_what_is_openvino_model_server.html) - Model serving runtime documentation
+- [KServe](https://kserve.github.io/website/) - Kubernetes-based model serving platform
+- [Label Studio](https://labelstud.io/) - Data annotation and labeling tool
+- [LangGraph](https://langchain-ai.github.io/langgraph/) - Framework for building stateful LLM applications
+
+### Project components
+
+- [BoxMOT](https://github.com/mikel-brostrom/boxmot) - Multi-object tracking library
+- [Arize Phoenix](https://docs.arize.com/phoenix/) - LLM observability and tracing
+- [MinIO](https://min.io/) - S3-compatible object storage
+
 ## Tags
 
-* **Product:** OpenShift AI (optional deployment target)
-* **Use case:** Multimodal monitoring, video analytics, object detection
-* **Business challenge:** Workplace safety and operational visibility
+- **Industry:** Manufacturing
+- **Product:** Red Hat OpenShift AI
+- **Use case:** Multimodal monitoring, object detection, workplace safety
