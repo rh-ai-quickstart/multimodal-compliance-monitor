@@ -37,6 +37,8 @@ Monitor workplace safety and operational compliance in real time using AI object
 
 Organizations face challenges maintaining workplace safety and operational compliance across facilities with multiple video feeds. Manual monitoring is resource-intensive and reactive, often missing critical events or patterns that indicate safety risks or operational inefficiencies.
 
+![Screenshot of application showing PPE detection](docs/images/application-ui.png)
+
 This AI quickstart provides a complete multimodal monitoring solution that combines computer vision and large language models (LLMs) to analyze video streams in real time. The application uses trained object-detection models to identify objects, people, and events in live RTSP feeds or uploaded video files. Users can monitor multiple video sources through an interactive dashboard, view detection overlays, and ask questions about what the AI has observed using a conversational chat interface.
 
 **Key capabilities:**
