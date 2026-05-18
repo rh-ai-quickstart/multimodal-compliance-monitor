@@ -25,3 +25,8 @@ dependencies = [
     "torchvision>=0.25.0",
     "tritonclient[grpc]>=2.42.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

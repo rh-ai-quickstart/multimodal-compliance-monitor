@@ -1,0 +1,20 @@
+name: Cleanup stale venv caches
+
+on:
+  push:
+    paths:
+      - 'app/backend/uv.lock'
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete stale venv caches
+        uses: DareFox/delete-cache-by-key@v1
+        with:
+          key: venv-
+          mode: startsWith
+          attempts: 3

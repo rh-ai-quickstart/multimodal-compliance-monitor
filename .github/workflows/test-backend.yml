@@ -7,10 +7,10 @@ on:
   #   paths:
   #     - 'app/backend/**'
   #     - '.github/workflows/test-backend.yml'
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - 'app/backend/**'
+  push:
+    branches: [main]
+    paths:
+      - 'app/backend/**'
 
 jobs:
   test:
@@ -37,9 +37,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-libgl-${{ runner.os }}
+
+      - name: Install system dependencies
+        run: apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0
+
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Cache venv
+        uses: actions/cache@v4
+        with:
+          path: app/backend/.venv
+          key: venv-${{ runner.os }}-py3.11-${{ hashFiles('app/backend/uv.lock') }}
 
       - name: Install dependencies
         working-directory: app/backend
@@ -47,6 +64,7 @@ jobs:
 
       - name: Run tests
         working-directory: app/backend
-        run: pytest tests/ -v
+        run: uv run python -m pytest tests/ -v
         env:
           PYTHONPATH: ${{ github.workspace }}/app/backend:${{ github.workspace }}/app/backend/tests
+          POSTGRES_MCP_URL: "http://localhost:9999/sse"
