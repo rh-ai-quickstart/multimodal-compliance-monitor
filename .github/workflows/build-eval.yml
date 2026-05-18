@@ -21,7 +21,7 @@ jobs:
       contents: read
       packages: write
     with:
-      image_name: rh-ai-quickstart/ppe-compliance-monitor-evals
+      image_name: rh-ai-quickstart/ppe-compliance-monitor-eval
       context: ./app/evals
       dockerfile: ./app/evals/Containerfile
     secrets:

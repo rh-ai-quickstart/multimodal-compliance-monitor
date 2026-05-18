@@ -199,8 +199,8 @@ jupyter-training:
   auth:
     existingSecretName: ""
     token: changeme
-  # jupyterGit.enabled: true  # re-enable Git in Lab; remove pip uninstall from training/jupyter-training/Dockerfile, rebuild image, ensure git on PATH
-  # trainingExample.seedOnStartup: false  # skip copying bundled training/yolo_training.ipynb into the notebook root / PVC
+    # jupyterGit.enabled: true  # re-enable Git in Lab; remove pip uninstall from training/jupyter-training/Dockerfile, rebuild image, ensure git on PATH
+    # trainingExample.seedOnStartup: false  # skip copying bundled training/yolo_training.ipynb into the notebook root / PVC
 
 # Postgres MCP server (read-only SSE access for the LLM agent)
 postgresMcp:
@@ -215,7 +215,7 @@ postgresMcp:
 eval:
   enabled: true
   image:
-    repository: quay.io/rh-ai-quickstart/ppe-compliance-monitor-evals
+    repository: quay.io/rh-ai-quickstart/ppe-compliance-monitor-eval
     tag: latest
     pullPolicy: Always
 
