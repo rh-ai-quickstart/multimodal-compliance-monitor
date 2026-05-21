@@ -34,7 +34,7 @@ spec:
               echo "Backend is ready"
       containers:
         - name: eval
-          image: "{{ .Values.eval.image.repository }}:{{ .Values.eval.image.tag }}"
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.eval.image.repository }}:{{ .Values.eval.image.tag }}"
           imagePullPolicy: {{ .Values.eval.image.pullPolicy }}
           env:
             - name: BACKEND_URL

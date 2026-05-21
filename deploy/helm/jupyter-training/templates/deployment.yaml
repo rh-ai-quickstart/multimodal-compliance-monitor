@@ -26,7 +26,7 @@ spec:
       {{- end }}
       containers:
         - name: jupyter
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.imageRegistry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           # Ensure root_dir exists; re-exec image entrypoint. OpenShift: PVC at /home/jovyan/work may be EACCES → isdir false → Jupyter "No such directory".
           command:

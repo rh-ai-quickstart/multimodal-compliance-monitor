@@ -20,6 +20,8 @@ jupyterGit:
 trainingExample:
   seedOnStartup: true
 
+imageRegistry: quay.io/rh-ai-quickstart
+
 image:
   repository: quay.io/jupyter/scipy-notebook
   tag: python-3.11

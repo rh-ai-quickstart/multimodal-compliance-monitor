@@ -1,3 +1,7 @@
+# Global configuration
+global:
+  imageRegistry: quay.io/rh-ai-quickstart
+
 # Init/wait images that previously hit Docker Hub anonymous rate limits (postgres, busybox).
 # mirror.gcr.io/library/* serves Docker Hub official library images for pulls that bypass docker.io quotas.
 initUtils:
@@ -20,7 +24,7 @@ backend:
   configStorage:
     enabled: true
   image:
-    repository: quay.io/rh-ai-quickstart/ppe-compliance-monitor-backend
+    repository: ppe-compliance-monitor-backend
     tag: latest
     pullPolicy: Always
   # REST URL for KServe status (8888); gRPC for OVMS remains port 9000 (defaultOvmsModelUrl). Multi-model OVMS keeps ISVC name "ppe" → ppe-predictor.
@@ -45,7 +49,7 @@ frontend:
   port: 3000
   apiUrl: ""
   image:
-    repository: quay.io/rh-ai-quickstart/ppe-compliance-monitor-frontend
+    repository: ppe-compliance-monitor-frontend
     tag: latest
     pullPolicy: Always
 
@@ -169,8 +173,9 @@ labelStudio:
 # JupyterLab (YOLO training notebook); workload data lives on PVC mounted at /home/jovyan/work
 jupyter-training:
   enabled: true
+  imageRegistry: quay.io/rh-ai-quickstart
   image:
-    repository: quay.io/rh-ai-quickstart/ppe-compliance-monitor-jupyter-training
+    repository: ppe-compliance-monitor-jupyter-training
     tag: latest
     pullPolicy: Always
   resources:
@@ -215,13 +220,13 @@ postgresMcp:
 eval:
   enabled: true
   image:
-    repository: quay.io/rh-ai-quickstart/ppe-compliance-monitor-eval
+    repository: ppe-compliance-monitor-eval
     tag: latest
     pullPolicy: Always
 
 data:
   image:
-    repository: quay.io/rh-ai-quickstart/ppe-compliance-monitor-data
+    repository: ppe-compliance-monitor-data
     tag: latest
     pullPolicy: Always
 
@@ -233,7 +238,7 @@ runtimeDeployer:
   # Use "ppe" so OpenVINO multi-model matches defaultOvmsModelUrl/seeded model_url (ppe-predictor:9000). Override if you use a different ISVC name.
   inferenceServiceName: "ppe"
   image:
-    repository: quay.io/rh-ai-quickstart/ppe-compliance-monitor-runtime
+    repository: ppe-compliance-monitor-runtime
     tag: latest
     pullPolicy: Always
   scc:

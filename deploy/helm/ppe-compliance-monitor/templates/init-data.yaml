@@ -18,7 +18,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: init-data-and-model
-          image: "{{ .Values.data.image.repository }}:{{ .Values.data.image.tag }}"
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.data.image.repository }}:{{ .Values.data.image.tag }}"
           imagePullPolicy: {{ .Values.data.image.pullPolicy }}
           env:
             - name: MINIO_ENDPOINT

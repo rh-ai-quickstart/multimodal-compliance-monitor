@@ -131,7 +131,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: runtime-deployer
-          image: "{{ .Values.runtimeDeployer.image.repository }}:{{ .Values.runtimeDeployer.image.tag }}"
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.runtimeDeployer.image.repository }}:{{ .Values.runtimeDeployer.image.tag }}"
           imagePullPolicy: {{ .Values.runtimeDeployer.image.pullPolicy }}
           env:
             - name: NAMESPACE

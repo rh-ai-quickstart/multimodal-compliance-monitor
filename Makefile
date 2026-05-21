@@ -1,12 +1,17 @@
 .DEFAULT_GOAL := help
-.PHONY: help local-up local-build-up local-down build push deploy deploy-cpu deploy-gpu deploy-openvino-labelstudio deploy-labelstudio undeploy dev-backend dev-frontend local-build build-push-data build-jupyter-training push-jupyter-training kill-ports check-openai-env eval eval-k8s init-eval-db
+.PHONY: help local-up local-build-up local-down build push build-all push-all build-data push-data build-eval push-eval build-runtime push-runtime helm-deps deploy deploy-cpu deploy-gpu deploy-openvino-labelstudio deploy-labelstudio undeploy dev-backend dev-frontend local-build build-push-data build-jupyter-training push-jupyter-training kill-ports check-openai-env eval eval-k8s init-eval-db
 help:
 	@echo "Available targets:"
 	@echo "  local-up   - Start local stack with Podman Compose"
 	@echo "  local-build-up - Build and start local stack (see podman-compose backend env)"
 	@echo "  local-down - Stop local stack"
-	@echo "  build      - Build container image"
-	@echo "  push       - Push container image"
+	@echo "  build      - Build backend and frontend images"
+	@echo "  push       - Push backend and frontend images"
+	@echo "  build-all  - Build all container images (backend, frontend, data, eval, runtime, jupyter-training)"
+	@echo "  push-all   - Push all container images to IMAGE_REGISTRY"
+	@echo "  build-data - Build data container image (video + models)"
+	@echo "  build-eval - Build eval container image"
+	@echo "  build-runtime - Build runtime deployer container image"
 	@echo "  build-push-data - Build and push data container image (video + models)"
 	@echo "  deploy     - Deploy to OpenShift with OpenVINO CPU runtime (default)"
 	@echo "  deploy-cpu - Deploy with CPU runtime (OpenVINO Model Server)"
@@ -15,6 +20,7 @@ help:
 	@echo "  push-jupyter-training - Push Jupyter training image (after build-jupyter-training)"
 	@echo "  deploy-openvino-labelstudio - Deploy OpenVINO runtime with Label Studio enabled"
 	@echo "  deploy-labelstudio - Deploy and enable Label Studio"
+	@echo "  helm-deps  - Update Helm chart dependencies"
 	@echo "  undeploy   - Remove manifests from OpenShift"
 	@echo "  dev-backend - Create venv, install deps, run backend"
 	@echo "  dev-frontend - Install deps and run frontend"
@@ -43,6 +49,8 @@ IMAGE_REPOSITORY := $(if $(IMAGE_REGISTRY),$(IMAGE_REGISTRY)/,)$(IMAGE_NAME)
 BACKEND_IMAGE := $(IMAGE_REPOSITORY)-backend:$(IMAGE_TAG)
 FRONTEND_IMAGE := $(IMAGE_REPOSITORY)-frontend:$(IMAGE_TAG)
 DATA_IMAGE := $(IMAGE_REPOSITORY)-data:$(IMAGE_TAG)
+EVAL_IMAGE := $(IMAGE_REPOSITORY)-eval:$(IMAGE_TAG)
+RUNTIME_IMAGE := $(IMAGE_REPOSITORY)-runtime:$(IMAGE_TAG)
 JUPYTER_TRAINING_IMAGE := $(IMAGE_REPOSITORY)-jupyter-training:$(IMAGE_TAG)
 LOCAL_BACKEND_IMAGE ?= ppe-compliance-monitor-backend:local
 LOCAL_FRONTEND_IMAGE ?= ppe-compliance-monitor-frontend:local
@@ -58,6 +66,10 @@ RUNTIME_TYPE ?= openvino
 LABEL_STUDIO_ENABLED ?=
 EVAL_FEATURE ?= chat
 EVAL_DATASET ?= ppe
+
+helm-deps:
+	@echo "Updating Helm chart dependencies..."
+	cd $(HELM_CHART) && helm dependency update
 
 check-openai-env:
 	@token="$(OPENAI_API_TOKEN)"; \
@@ -122,6 +134,52 @@ push-jupyter-training:
 		exit 1; \
 	fi
 
+build-data:
+	podman build --platform $(PLATFORM_RELEASE) -t $(DATA_IMAGE) -f app/data-image/Dockerfile app
+
+push-data:
+	@if podman image exists $(DATA_IMAGE); then \
+		podman push $(DATA_IMAGE); \
+	else \
+		echo "Image $(DATA_IMAGE) not found. Run 'make build-data' first."; \
+		exit 1; \
+	fi
+
+build-eval:
+	podman build --platform $(PLATFORM_RELEASE) -t $(EVAL_IMAGE) -f app/evals/Containerfile app/evals
+
+push-eval:
+	@if podman image exists $(EVAL_IMAGE); then \
+		podman push $(EVAL_IMAGE); \
+	else \
+		echo "Image $(EVAL_IMAGE) not found. Run 'make build-eval' first."; \
+		exit 1; \
+	fi
+
+build-runtime:
+	podman build --platform $(PLATFORM_RELEASE) -t $(RUNTIME_IMAGE) -f app/runtime/Containerfile app/runtime
+
+push-runtime:
+	@if podman image exists $(RUNTIME_IMAGE); then \
+		podman push $(RUNTIME_IMAGE); \
+	else \
+		echo "Image $(RUNTIME_IMAGE) not found. Run 'make build-runtime' first."; \
+		exit 1; \
+	fi
+
+build-all: build build-data build-eval build-runtime build-jupyter-training
+	@echo "All images built successfully"
+
+push-all:
+	@echo "Pushing all images to $(IMAGE_REGISTRY)..."
+	@if podman image exists $(BACKEND_IMAGE); then podman push $(BACKEND_IMAGE); else echo "Warning: $(BACKEND_IMAGE) not found"; fi
+	@if podman image exists $(FRONTEND_IMAGE); then podman push $(FRONTEND_IMAGE); else echo "Warning: $(FRONTEND_IMAGE) not found"; fi
+	@if podman image exists $(DATA_IMAGE); then podman push $(DATA_IMAGE); else echo "Warning: $(DATA_IMAGE) not found"; fi
+	@if podman image exists $(EVAL_IMAGE); then podman push $(EVAL_IMAGE); else echo "Warning: $(EVAL_IMAGE) not found"; fi
+	@if podman image exists $(RUNTIME_IMAGE); then podman push $(RUNTIME_IMAGE); else echo "Warning: $(RUNTIME_IMAGE) not found"; fi
+	@if podman image exists $(JUPYTER_TRAINING_IMAGE); then podman push $(JUPYTER_TRAINING_IMAGE); else echo "Warning: $(JUPYTER_TRAINING_IMAGE) not found"; fi
+	@echo "All available images pushed to $(IMAGE_REGISTRY)"
+
 deploy: check-openai-env
 	@. ./.env; \
 	domain=$$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}' 2>/dev/null || true); \
@@ -133,12 +191,14 @@ deploy: check-openai-env
 		host=""; \
 		ls_host=""; \
 	fi; \
-	helm_args="--set backend.image.repository=$(IMAGE_REPOSITORY)-backend \
+	helm_args="--set global.imageRegistry=$(IMAGE_REGISTRY) \
+		--set jupyter-training.imageRegistry=$(IMAGE_REGISTRY) \
 		--set backend.image.tag=$(IMAGE_TAG) \
-		--set frontend.image.repository=$(IMAGE_REPOSITORY)-frontend \
 		--set frontend.image.tag=$(IMAGE_TAG) \
-		--set data.image.repository=$(IMAGE_REPOSITORY)-data \
 		--set data.image.tag=$(IMAGE_TAG) \
+		--set eval.image.tag=$(IMAGE_TAG) \
+		--set runtimeDeployer.image.tag=$(IMAGE_TAG) \
+		--set jupyter-training.image.tag=$(IMAGE_TAG) \
 		--set modelServing.runtimeType=$(RUNTIME_TYPE) \
 		$(if $(strip $(LABEL_STUDIO_ENABLED)),--set labelStudio.enabled=$(LABEL_STUDIO_ENABLED),) \
 		$${host:+--set openshift.sharedHost=$$host} \
