@@ -181,10 +181,10 @@ jupyter-training:
   resources:
     requests:
       cpu: 500m
-      memory: 1Gi
+      memory: 2Gi
     limits:
-      cpu: "1"
-      memory: 4Gi
+      cpu: "2"
+      memory: 8Gi
   # Do not set podSecurityContext.fsGroup: 100 on OpenShift (restricted-v2); it blocks pod creation (PVC stays Pending: WaitForFirstConsumer).
   # podSecurityContext:
   #   fsGroup: 100

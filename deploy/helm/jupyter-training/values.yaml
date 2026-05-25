@@ -10,7 +10,7 @@ jupyterHome: /tmp/jupyter-home
 # Set to /home/jovyan/work when podSecurityContext.fsGroup matches your namespace supplemental range (see NOTES).
 notebookRootDir: /tmp/jupyter-home/notebooks
 # Optional extra CLI args for start-notebook.py (omit ServerApp.*; avoid `*` unquoted — shell glob breaks parsing).
-notebookArgsExtra: ""
+notebookArgsExtra: "--LabApp.default_url=/lab/tree/yolo_training.ipynb"
 
 # JupyterLab Git UI + server extension (needs git on PATH). Off by default; set enabled: true to turn back on.
 jupyterGit:
@@ -38,14 +38,14 @@ route:
     termination: edge
     insecureEdgeTerminationPolicy: Redirect
 
-# Small CPU cap for tight clusters; 4Gi fits Jupyter + PyTorch + modest YOLO training better than 2Gi.
+# YOLO training needs more memory to avoid OOMKilled during model training
 resources:
   requests:
     cpu: 500m
-    memory: 1Gi
+    memory: 2Gi
   limits:
-    cpu: "1"
-    memory: 4Gi
+    cpu: "2"
+    memory: 8Gi
 
 # Omit on OpenShift (restricted-v2 rejects fsGroup 100). Uncomment on vanilla k8s if the notebook cannot write to the PVC.
 # podSecurityContext:

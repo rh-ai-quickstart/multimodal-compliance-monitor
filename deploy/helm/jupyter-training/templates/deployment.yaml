@@ -36,15 +36,15 @@ spec:
                 set -e;
                 mkdir -p {{ .Values.notebookRootDir | quote }};
                 {{- if .Values.trainingExample.seedOnStartup }}
-                BUNDLE=/opt/bundled-training/training;
-                mkdir -p {{ .Values.notebookRootDir | quote }}/training;
-                if [ ! -e {{ .Values.notebookRootDir | quote }}/training/yolo_training.ipynb ] && [ -f "$BUNDLE/yolo_training.ipynb" ]; then
-                  cp -a "$BUNDLE"/. {{ .Values.notebookRootDir | quote }}/training/;
+                BUNDLE=/opt/bundled-training;
+                rm -rf {{ .Values.notebookRootDir | quote }}/training;
+                if [ ! -e {{ .Values.notebookRootDir | quote }}/yolo_training.ipynb ] && [ -f "$BUNDLE/yolo_training.ipynb" ]; then
+                  cp -a "$BUNDLE"/yolo_training.ipynb {{ .Values.notebookRootDir | quote }}/;
                 fi;
                 if [ -w /home/jovyan/work ]; then
-                  mkdir -p /home/jovyan/work/training;
-                  if [ ! -e /home/jovyan/work/training/yolo_training.ipynb ] && [ -f "$BUNDLE/yolo_training.ipynb" ]; then
-                    cp -a "$BUNDLE"/. /home/jovyan/work/training/ || true;
+                  rm -rf /home/jovyan/work/training;
+                  if [ ! -e /home/jovyan/work/yolo_training.ipynb ]; then
+                    cp -a "$BUNDLE"/yolo_training.ipynb /home/jovyan/work/ || true;
                   fi;
                 fi;
                 {{- end }}

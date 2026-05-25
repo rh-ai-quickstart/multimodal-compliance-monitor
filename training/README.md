@@ -27,9 +27,9 @@ training/
 
 1. **Gather images** for training and validation (different photos for each split).
 2. **Label objects** with bounding boxes (recommended: [Label Studio](#labeling-with-label-studio-bounding-boxes); export **YOLO** format).
-3. **Lay out files** under **`upload/train_images/`**, **`upload/train_labels/`**, **`upload/val_images/`**, **`upload/val_labels/`** — each image and its `.txt` label share the **same base name**. Each `.txt` file contains YOLO annotations (normalized coordinates for object bounding boxes).
-4. **Open Jupyter** (OpenShift pod or laptop) so the notebook’s working directory is the folder that contains **`yolo_training.ipynb`** and **`upload/`** (see [Running the notebook](#running-the-notebook-two-approaches)).
-5. Run **`yolo_training.ipynb`** from **section 1** through **section 5** (what each section does is summarized in [Notebook sections (reference)](#notebook-sections-reference)).
+3. **Prepare your data**: Package files into `upload.tar.gz` with structure `upload/train_images/`, `upload/train_labels/`, `upload/val_images/`, `upload/val_labels/`. Upload the tarball via Jupyter and the notebook will auto-extract it (Section 1.5).
+    Each image and its `.txt` label must share the **same base name**. Each `.txt` file contains YOLO annotations (normalized coordinates for object bounding boxes).
+4. Run **`yolo_training.ipynb`** from **section 1** through **section 6** (what each section does is summarized in [Notebook sections (reference)](#notebook-sections-reference)).
 
 ## Labeling with Label Studio (bounding boxes)
 
@@ -82,16 +82,17 @@ The notebook uses **`WORKSPACE_ROOT = Path.cwd()`**. That directory must contain
 **High-level flow** (same wording as the notebook intro):
 
 1. **Step 1 (intro)** — **Section 1 (Configuration)**: install Ultralytics, collect config, create **`upload/…`** folders.
-2. **Step 2 (intro)** — **You** add files under **`upload/`** (Lab upload UI or **`tar xzf`** below).
+2. **Step 2 (intro)** — **Section 1.5 (Auto-Extract)**: if you uploaded **`upload.tar.gz`**, the notebook automatically extracts it.
 3. **Step 3 (intro)** — Run **sections 2** through **5** without skipping: copy → label matching → YAML → train.
 
 | Notebook section | What it does |
 |---------------------|----------------|
 | **1. Configuration & Create Upload Folders** | `%pip install ultralytics`; **`CLASSES`** / **`OUTPUT_ROOT`**; mkdir **`upload/…`**; prints paths. |
-| **2. Create YOLO Structure & Copy from Upload Folders** | Builds **`OUTPUT_ROOT/images/*`** and **`labels/*`** from **`upload/`**. |
-| **3. Label Matching** | Ensures each image has a matching `.txt` (empty file = negative example). |
-| **4. Generate Dataset YAML** | Writes **`data.yaml`** under **`OUTPUT_ROOT`**. |
-| **5. Train YOLO Model** | **`YOLO('yolov8n.pt').train(...)`** → **`runs/detect/badge-demo/weights/`**. |
+| **2. Auto-Extract Upload Archive** | Searches for **`upload.tar.gz`** in training folder or parent, automatically extracts it. Optional step (skip if uploading files manually). |
+| **3. Create YOLO Structure & Copy from Upload Folders** | Builds **`OUTPUT_ROOT/images/*`** and **`labels/*`** from **`upload/`**. |
+| **4. Label Matching** | Ensures each image has a matching `.txt` (empty file = negative example). |
+| **5. Generate Dataset YAML** | Writes **`data.yaml`** under **`OUTPUT_ROOT`**. |
+| **6. Train YOLO Model** | **`YOLO('yolov8n.pt').train(...)`** → **`runs/detect/badge-demo/weights/`**. |
 
 ### What the notebook code is doing (brief details)
 
@@ -102,23 +103,30 @@ The notebook uses **`WORKSPACE_ROOT = Path.cwd()`**. That directory must contain
    - Resolves `WORKSPACE_ROOT = Path.cwd()` and defines `UPLOAD_ROOT = WORKSPACE_ROOT / "upload"`.
    - Ensures upload staging folders exist (`train_images`, `train_labels`, `val_images`, `val_labels`) and prints resolved paths.
 
-2. **Section 2: Build YOLO dataset tree and copy inputs**
+2. **Section 2: Auto-extract upload archive (optional)**
+   - Searches for `upload.tar.gz` in the training folder and one level up (parent directory).
+   - If found, automatically extracts the tarball to `WORKSPACE_ROOT`, creating/updating the `upload/` directory structure.
+   - Shows extraction summary with file counts for each subdirectory (train_images, train_labels, val_images, val_labels).
+   - If not found, displays clear error message with search locations and next steps.
+   - Optional: skip if you're uploading files directly to the `upload/` folders via Jupyter's file browser.
+
+3. **Section 3: Build YOLO dataset tree and copy inputs**
    - Creates YOLO directory structure under `OUTPUT_ROOT`:
      `images/train`, `images/val`, `labels/train`, `labels/val`.
    - Scans your `upload/` folders and copies image files and label files into YOLO layout.
    - Uses file extension filtering and keeps original filenames so image-label base names can be matched later.
 
-3. **Section 3: Label matching / negative examples**
+4. **Section 4: Label matching / negative examples**
    - Compares images and labels by base filename in each split.
    - For any image without a matching label file, creates an **empty** `.txt` label.
    - This preserves negative samples (images with no objects) and prevents training errors from missing labels.
 
-4. **Section 4: Generate `data.yaml`**
+5. **Section 5: Generate `data.yaml`**
    - Writes dataset metadata file at `OUTPUT_ROOT/data.yaml`.
    - Sets train/val image directories and the number of classes.
    - Emits class index-to-name mapping from `CLASSES`, which YOLO uses during training and metrics reporting.
 
-5. **Section 5: Train YOLO**
+6. **Section 6: Train YOLO**
    - Loads pretrained weights with `YOLO("yolov8n.pt")` (transfer learning starting point).
    - Calls `model.train(...)` using the generated `data.yaml` and notebook defaults (for example `epochs=100`, `imgsz=640`, run name `badge-demo`).
    - Writes outputs under `runs/detect/badge-demo/`, including checkpoints (`best.pt`, `last.pt`) and training artifacts/plots.
@@ -192,31 +200,13 @@ Use **Upload** or drag-and-drop. You can place **`upload.tar.gz`** in either loc
 - **Beside `training/`** (under the notebook root — the folder that contains **`training/`**), or
 - **Inside `training/`** next to **`yolo_training.ipynb`** (works well if you already navigated into **`training`** in the file browser).
 
-#### Extract in a terminal (pick one)
+#### Auto-extract in the notebook
 
-Open **File → New → Terminal**. Go to the folder that contains **`yolo_training.ipynb`** (the **`training`** directory).
-
-**If `upload.tar.gz` sits next to `training/`** (under notebook root; replace the path with yours if **`notebookRootDir`** differs):
-
-```bash
-cd /tmp/jupyter-home/notebooks/training
-tar xzf ../upload.tar.gz
-```
-
-**If `upload.tar.gz` is already inside `training/`** (same folder as the notebook):
-
-```bash
-cd /tmp/jupyter-home/notebooks/training
-tar xzf upload.tar.gz
-```
-
-Some installs use **`$HOME/notebooks/training`** instead of **`/tmp/jupyter-home/notebooks/training`** — use **`pwd`** in the terminal opened from Jupyter’s **`training`** folder if unsure.
-
-Verify:
-
-```bash
-ls upload/train_images/ | head
-```
+After uploading `upload.tar.gz`, simply run **Section 2** in the notebook. The cell will:
+- Automatically search for `upload.tar.gz` in both locations (training folder and parent)
+- Extract it to the correct location
+- Show you what was extracted with file counts
+- Provide clear error messages if the file isn’t found
 
 #### Persistence (PVC)
 
@@ -224,7 +214,12 @@ Paths under the default **`notebookRootDir`** (often **`/tmp/jupyter-home/notebo
 
 #### Run the notebook
 
-Open **`training/yolo_training.ipynb`**, then run all cells **top to bottom** starting at **section 1**. After **`upload/`** is populated, continue through **section 5**.
+Open **`training/yolo_training.ipynb`**, then run all cells **top to bottom** starting at **section 1**:
+- **Section 1**: Configuration
+- **Section 2**: Auto-extract `upload.tar.gz` (if you uploaded the tarball)
+- **Sections 3-6**: Dataset creation and training
+
+After **`upload/`** is populated (via section 1.5 or manual upload), continue through **section 5**.
 
 ---
 
@@ -246,7 +241,10 @@ Open **`training/yolo_training.ipynb`**, then run all cells **top to bottom** st
 4. **Open `yolo_training.ipynb`** and run the cells **top to bottom**.  
    The first code cell runs `%pip install ultralytics`.
 
-5. **Data** — Complete [Label Studio](#labeling-with-label-studio-bounding-boxes) (or another tool), then arrange images and YOLO labels under **`upload/`**. Example label files live under **`upload/train_labels/`** and **`upload/val_labels/`** in the repo; image binaries are omitted from git. Run **sections 2–5** after train pairs are ready (summarized in [Notebook sections (reference)](#notebook-sections-reference)).
+5. **Data** — Complete [Label Studio](#labeling-with-label-studio-bounding-boxes) (or another tool), then arrange your images and YOLO labels under **`upload/`** subdirectories:
+   - Create `upload.tar.gz` and upload it via Jupyter, then run **Section 2** to auto-extract
+   
+   Example label files live under **`upload/train_labels/`** and **`upload/val_labels/`** in the repo; image binaries are omitted from git. Run **sections 2–5** after your data is ready (summarized in [Notebook sections (reference)](#notebook-sections-reference)).
 
 ## Using Your Own Data
 

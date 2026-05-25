@@ -1,0 +1,14 @@
+{{- if .Values.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "jupyter-training.fullname" . }}-jupyter-server
+  labels:
+    {{- include "jupyter-training.labels" . | nindent 4 }}
+    app.kubernetes.io/component: jupyter
+data:
+  jupyter_server_config.json: |
+{{- include "jupyter-training.jupyterServerConfigJSON" . | nindent 4 }}
+  jupyter_lab_config.json: |
+{{- include "jupyter-training.jupyterLabConfigJSON" . | nindent 4 }}
+{{- end }}
