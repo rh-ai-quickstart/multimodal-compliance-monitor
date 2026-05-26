@@ -35,14 +35,14 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 
 {{- define "jupyter-training.jupyterServerConfigJSON" -}}
 {{- $gitOff := not .Values.jupyterGit.enabled -}}
-{"ServerApp":{"ip":"0.0.0.0","allow_origin":"*","allow_remote_access":true,"trust_xheaders":true,"root_dir":{{ .Values.notebookRootDir | toJson }}{{ if $gitOff }},"jpserver_extensions":{"jupyterlab_git":false}{{ end }} }}
+{"ServerApp":{"ip":"0.0.0.0","allow_origin":"*","allow_remote_access":true,"trust_xheaders":true,"root_dir":{{ .Values.notebookRootDir | toJson }},"default_url":"/lab/tree/yolo_training.ipynb"{{ if $gitOff }},"jpserver_extensions":{"jupyterlab_git":false}{{ end }} }}
 {{- end }}
 
 {{- define "jupyter-training.jupyterLabConfigJSON" -}}
 {{- if .Values.jupyterGit.enabled -}}
-{}
+{"defaultUrl":"/lab/tree/yolo_training.ipynb"}
 {{- else -}}
-{"disabledExtensions":["@jupyterlab/git"]}
+{"disabledExtensions":["@jupyterlab/git"],"defaultUrl":"/lab/tree/yolo_training.ipynb"}
 {{- end -}}
 {{- end }}
 

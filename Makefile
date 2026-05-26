@@ -180,7 +180,7 @@ push-all:
 	@if podman image exists $(JUPYTER_TRAINING_IMAGE); then podman push $(JUPYTER_TRAINING_IMAGE); else echo "Warning: $(JUPYTER_TRAINING_IMAGE) not found"; fi
 	@echo "All available images pushed to $(IMAGE_REGISTRY)"
 
-deploy: check-openai-env
+deploy: helm-deps check-openai-env
 	@. ./.env; \
 	domain=$$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}' 2>/dev/null || true); \
 	if [ -n "$(NAMESPACE)" ]; then oc new-project "$(NAMESPACE)" --display-name="$(NAMESPACE)" >/dev/null 2>&1 || oc project "$(NAMESPACE)"; fi; \
