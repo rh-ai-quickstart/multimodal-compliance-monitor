@@ -21,42 +21,66 @@ spec:
     spec:
       initContainers:
         - name: download-video
-          image: "{{ .Values.videoStream.ffmpegImage.repository }}:{{ .Values.videoStream.ffmpegImage.tag }}"
-          imagePullPolicy: {{ .Values.videoStream.ffmpegImage.pullPolicy }}
+          image: {{ .Values.jobImages.python | quote }}
+          imagePullPolicy: IfNotPresent
           command:
-            - /bin/sh
+            - /bin/bash
             - -c
             - |
-              set -e
-              export MC_CONFIG_DIR=/tmp/.mc
-              SRC="myminio/{{ .Values.storage.video.bucket }}/{{ .Values.storage.video.key }}"
-              echo "[download-video] MINIO_ENDPOINT=${MINIO_ENDPOINT}"
-              echo "[download-video] source object: ${SRC}"
-              until mc alias set myminio "${MINIO_ENDPOINT}" "{{ .Values.minio.secret.user }}" "{{ .Values.minio.secret.password }}"; do
-                echo "[download-video] mc alias set failed (see error above); retrying in 2s..."
-                sleep 2
-              done
-              echo "[download-video] mc alias OK"
-              if ! mc stat "${SRC}"; then
-                echo "[download-video] mc stat failed — bucket/key missing, wrong credentials, or MinIO unreachable"
-                exit 1
-              fi
-              echo "[download-video] copying to /data/video.mp4"
-              mc cp "${SRC}" /data/video.mp4
-              echo "[download-video] /data after copy:"
-              ls -la /data || true
-              if [ ! -s /data/video.mp4 ]; then
-                echo "[download-video] ERROR: /data/video.mp4 missing or empty after mc cp"
-                exit 1
-              fi
-              echo "[download-video] ok size_bytes=$(wc -c </data/video.mp4)"
+              set -eu
+              export HOME=/tmp
+              pip install --no-cache-dir -q boto3
+              python - <<'PY'
+              import os, time
+              import boto3
+              from botocore.client import Config
+
+              endpoint = os.environ["AWS_ENDPOINT_URL"]
+              bucket = os.environ["VIDEO_BUCKET"]
+              key = os.environ["VIDEO_KEY"]
+              dest = "/data/video.mp4"
+              print("[download-video] endpoint=" + endpoint)
+              print("[download-video] source object: s3://" + bucket + "/" + key)
+
+              def client():
+                  return boto3.client(
+                      "s3",
+                      endpoint_url=endpoint,
+                      aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+                      aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+                      region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+                      config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+                  )
+
+              s3 = None
+              last = None
+              for attempt in range(1, 61):
+                  try:
+                      s3 = client()
+                      s3.head_object(Bucket=bucket, Key=key)
+                      break
+                  except Exception as exc:
+                      last = exc
+                      print("[download-video] object not ready (attempt " + str(attempt) + "/60): " + str(exc))
+                      time.sleep(5)
+              else:
+                  raise SystemExit("[download-video] object missing or storage unreachable: " + str(last))
+
+              print("[download-video] copying to /data/video.mp4")
+              s3.download_file(bucket, key, dest)
+              size = os.path.getsize(dest)
+              if size <= 0:
+                  raise SystemExit("[download-video] ERROR: /data/video.mp4 missing or empty")
+              print("[download-video] ok size_bytes=" + str(size))
+              PY
           env:
-            - name: MINIO_ENDPOINT
-              value: "http://{{ .Values.minio.secret.host }}:{{ .Values.minio.secret.port }}"
-            - name: MINIO_ACCESS_KEY
-              value: {{ .Values.minio.secret.user | quote }}
-            - name: MINIO_SECRET_KEY
-              value: {{ .Values.minio.secret.password | quote }}
+            - name: HOME
+              value: /tmp
+            {{- include "ppe-compliance-monitor.s3Env" . | nindent 12 }}
+            - name: VIDEO_BUCKET
+              value: {{ .Values.storage.video.bucket | quote }}
+            - name: VIDEO_KEY
+              value: {{ .Values.storage.video.key | quote }}
           volumeMounts:
             - name: video-data
               mountPath: /data
@@ -86,7 +110,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: VIDEO_SRC_HINT
-              value: "{{ .Values.storage.video.bucket }}/{{ .Values.storage.video.key }} (init uses mc cp from MinIO)"
+              value: "s3://{{ .Values.storage.video.bucket }}/{{ .Values.storage.video.key }}"
           command:
             - /bin/sh
             - -c
@@ -94,7 +118,7 @@ spec:
               echo "[ffmpeg] listing /data (from download-video init):"
               ls -la /data 2>&1 || true
               if [ ! -f /data/video.mp4 ]; then
-                echo "[ffmpeg] ERROR: /data/video.mp4 not found — check download-video init logs and MinIO object ${VIDEO_SRC_HINT:-}"
+                echo "[ffmpeg] ERROR: /data/video.mp4 not found — check download-video init logs and object ${VIDEO_SRC_HINT:-}"
                 exit 1
               fi
               if [ ! -s /data/video.mp4 ]; then

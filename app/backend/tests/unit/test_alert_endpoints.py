@@ -56,12 +56,12 @@ def _load_app_module(monkeypatch):
     logger_mod.get_logger = lambda _name: _DummyLogger()
     monkeypatch.setitem(sys.modules, "logger", logger_mod)
 
-    minio_mod = types.ModuleType("minio_client")
-    minio_mod.get_config_bucket = lambda: "config"
-    minio_mod.upload_bytes = lambda *args, **kwargs: None
-    minio_mod.get_object_stream = lambda *args, **kwargs: None
-    minio_mod.object_exists = lambda *args, **kwargs: False
-    monkeypatch.setitem(sys.modules, "minio_client", minio_mod)
+    storage_mod = types.ModuleType("s3_client")
+    storage_mod.get_config_bucket = lambda: "config"
+    storage_mod.upload_bytes = lambda *args, **kwargs: None
+    storage_mod.get_object_stream = lambda *args, **kwargs: None
+    storage_mod.object_exists = lambda *args, **kwargs: False
+    monkeypatch.setitem(sys.modules, "s3_client", storage_mod)
 
     db_mod = types.ModuleType("database")
     db_mod.count_app_configs = lambda: 1

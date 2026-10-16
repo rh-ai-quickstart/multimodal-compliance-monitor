@@ -3,29 +3,35 @@ version: "3.8"
 networks:
   ppe:
 
-
 services:
-  minio:
-    image: docker.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    container_name: minio
+  aws-compatible-storage:
+    image: quay.io/rh-aiservices-bu/s4:0.3.2
+    container_name: aws-compatible-storage
     ports:
-      - "9000:9000"
-      - "9001:9001" # MinIO Console port
+      - "5000:5000" # web UI
+      - "7480:7480" # S3 API
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-      - MINIO_SERVER_URL=http://minio:9000
-    command: server /data --console-address ":9001"
+      # Local demo keys only. Cluster installs use Secret aws-compatible-storage-credentials.
+      AWS_ACCESS_KEY_ID: s4admin
+      AWS_SECRET_ACCESS_KEY: s4secret
+      AWS_DEFAULT_REGION: us-east-1
+      UI_USERNAME: admin
+      UI_PASSWORD: changeme
     networks:
       - ppe
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 5s
+      # S4 0.3.2 installs Node.js at /usr/bin/node (UI process). Probe the UI /api path.
+      test:
+        - CMD
+        - /usr/bin/node
+        - -e
+        - "require('http').get('http://127.0.0.1:5000/api',(r)=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))"
+      interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 5s
+      retries: 30
+      start_period: 20s
     volumes:
-      - minio_data:/data
+      - s3_compatible_data:/var/lib/ceph/radosgw
     pull_policy: missing
 
   # PostgreSQL database for tracking data persistence
@@ -66,14 +72,14 @@ services:
       - ppe
     pull_policy: missing
 
-  # Label Studio annotation UI (uses the same PostgreSQL and MinIO services)
+  # Label Studio annotation UI (uses the same PostgreSQL service)
   labelstudio:
     image: docker.io/heartexlabs/label-studio@sha256:aa461572e8f9d86a1bf9520c1db620204e86160fd2f80dd7e9d40ac84a8828ea
     container_name: labelstudio
     depends_on:
       postgresql:
         condition: service_healthy
-      minio:
+      aws-compatible-storage:
         condition: service_healthy
     environment:
       DJANGO_DB: default
@@ -103,7 +109,7 @@ services:
       - ppe
     pull_policy: missing
 
-  # FFmpeg publisher: downloads MP4 from MinIO and streams to MediaMTX
+  # FFmpeg publisher: downloads MP4 from aws-compatible-storage and streams to MediaMTX
   video-stream-ffmpeg:
     build:
       context: ../../app
@@ -114,21 +120,22 @@ services:
         condition: service_completed_successfully
       video-stream:
         condition: service_started
-      minio:
+      aws-compatible-storage:
         condition: service_healthy
     environment:
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      MINIO_VIDEO_BUCKET: data
-      MINIO_VIDEO_KEY: combined-video-no-gap-rooftop.mp4
+      AWS_ENDPOINT_URL: http://aws-compatible-storage:7480
+      AWS_ACCESS_KEY_ID: s4admin
+      AWS_SECRET_ACCESS_KEY: s4secret
+      AWS_DEFAULT_REGION: us-east-1
+      VIDEO_BUCKET: data
+      VIDEO_KEY: combined-video-no-gap-rooftop.mp4
       MEDIAMTX_HOST: video-stream
       MEDIAMTX_PORT: "8554"
     networks:
       - ppe
     restart: unless-stopped
 
-  # Init service: uploads model and video files to MinIO (idempotent)
+  # Init service: uploads model and video files to aws-compatible-storage (idempotent)
   data-loader:
     build:
       context: ../../app
@@ -136,12 +143,13 @@ services:
     image: ppe-compliance-monitor-data:local
     pull_policy: missing
     depends_on:
-      minio:
+      aws-compatible-storage:
         condition: service_healthy
     environment:
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      AWS_ENDPOINT_URL: http://aws-compatible-storage:7480
+      AWS_ACCESS_KEY_ID: s4admin
+      AWS_SECRET_ACCESS_KEY: s4secret
+      AWS_DEFAULT_REGION: us-east-1
       RUNTIME_TYPE: openvino
     networks:
       - ppe
@@ -158,7 +166,7 @@ services:
         condition: service_completed_successfully
       video-stream:
         condition: service_started
-      minio:
+      aws-compatible-storage:
         condition: service_healthy
       postgresql:
         condition: service_healthy
@@ -167,12 +175,11 @@ services:
     environment:
       CORS_ORIGINS: "http://localhost:3000,http://0.0.0.0:3000,http://127.0.0.1:3000"
       POSTGRES_MCP_URL: "http://postgres-mcp:8000/sse"
-      # MinIO configuration
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      MINIO_SECURE: "false"
-      MINIO_VIDEO_BUCKET: data
+      AWS_ENDPOINT_URL: http://aws-compatible-storage:7480
+      AWS_ACCESS_KEY_ID: s4admin
+      AWS_SECRET_ACCESS_KEY: s4secret
+      AWS_DEFAULT_REGION: us-east-1
+      VIDEO_BUCKET: data
       # model_name comes from app_config; tensor input/version overrides optional
       MODEL_INPUT_NAME: "x"
       MODEL_VERSION: "1"
@@ -187,7 +194,7 @@ services:
       OPENAI_API_ENDPOINT: "${OPENAI_API_ENDPOINT}"
       OPENAI_MODEL: "${OPENAI_MODEL}"
       OPENAI_TEMPERATURE: "${OPENAI_TEMPERATURE:-0.7}"
-      # Config storage: MinIO (enables horizontal scaling)
+      # Config storage: aws-compatible-storage config bucket (enables horizontal scaling)
       CONFIG_BUCKET: config
       DEFAULT_OVMS_MODEL_URL: "ovms:8081"
       PHOENIX_COLLECTOR_ENDPOINT: "http://phoenix:4317"
@@ -224,7 +231,6 @@ services:
     profiles:
       - eval
     pull_policy: missing
-
 
   phoenix:
     image: docker.io/arizephoenix/phoenix@sha256:21d06ca8f3a690652389e6cd2c3f59e83bedfb16cf8881629e7df5965c7dd0e0
@@ -325,7 +331,7 @@ services:
       start_period: 30s
 
 volumes:
-  minio_data:
+  s3_compatible_data:
   postgres_data:
   labelstudio_data:
   model_repo:

@@ -168,7 +168,7 @@ Create a config with the same fields the Config UI sends. **`classes`** keys are
 | **`trackable`** | yes | Whether that class is used for object tracking (e.g. Person and DeepSORT). |
 | **`include_in_counts`** | no (default **`true`**) | When **`false`**, detections for that class are omitted from bounding boxes, per-class aggregate counts, and tracker input. Omit this field when every class should appear (typical bird demo). |
 
-Example body (OVMS on compose service **`ovms`**, sample video in MinIO **`data`** bucket after seeds / upload job):
+Example body (OVMS on compose service **`ovms`**, sample video in the **`data`** bucket after seeds / upload job):
 
 ```json
 {
@@ -203,7 +203,7 @@ Updates use the same JSON shape on **`PUT /api/config/<id>`**. Adjust **`video_s
 ### YOLOv8n (`yolov8n.pt`) and `cars.mp4` (COCO)
 
 - **Weights:** keep **`app/models/yolov8n.pt`** and import with **`python deploy/local/import_model_weight.py yolov8n.pt`** (or rely on a full stack build that runs **`yolo-model-prep`** over all **`app/models/*.pt`**). In the Config dialog, **Model name** must be **`yolov8n`** (the file stem).
-- **Video:** **`app/data/cars.mp4`** is included in the data-loader image and uploaded to MinIO by **`app/data-image/upload.sh`** as **`data/cars.mp4`**. Use **`video_source`**: **`s3://data/cars.mp4`** for playback from MinIO.
+- **Video:** **`app/data/cars.mp4`** is included in the data-loader image and uploaded by **`app/data-image/upload.sh`** as **`data/cars.mp4`**. Use **`video_source`**: **`s3://data/cars.mp4`** for playback from object storage.
 - **Classes:** YOLOv8n uses the **80-class COCO** output order. Every index **`"0"`**–**`"79"`** should appear in **`classes`** so labels match the model head. The example below is tuned for a **vehicle-focused** demo on **`cars.mp4`**: only **`car`** (index **`2`**) is **`trackable`** and **`include_in_counts`: `true`**; all other classes remain mapped for correct post-processing but are excluded from counts and overlay-related aggregation. Change **`trackable`** / **`include_in_counts`** (e.g. set **`person`** to trackable) if you want people-tracking or more classes visible.
 
 Use this shape for **`POST /api/config`** (merge the **`classes`** object below into the body). Top-level fields:

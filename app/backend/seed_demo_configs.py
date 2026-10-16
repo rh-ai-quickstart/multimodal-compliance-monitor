@@ -2,7 +2,7 @@
 
 Copies sample MP4s from the data bucket into CONFIG_BUCKET at uploads/<basename>,
 using the same filenames as in the data bucket (unique per demo). The RTSP row has no
-MinIO copy or thumbnail; it appears in the Source RTSP dropdown.
+object copy or thumbnail; it appears in the Source RTSP dropdown.
 """
 
 from __future__ import annotations
@@ -15,13 +15,13 @@ from database import (
     insert_config,
     replace_detection_classes,
 )
-from minio_client import (
+from s3_client import (
     copy_object,
     get_config_bucket,
     object_exists,
-    get_minio_client,
+    get_s3_client,
 )
-from minio.error import S3Error
+from botocore.exceptions import BotoCoreError, ClientError
 from thumbnail_utils import generate_thumbnail_for_video_source
 
 log = get_logger(__name__)
@@ -167,11 +167,11 @@ def _ensure_object_with_retry(
     max_retries: int = 12,
     delay_s: float = 2.0,
 ) -> None:
-    if object_exists(dest_bucket, dest_key):
-        log.debug(f"Seed object already present: {dest_bucket}/{dest_key}")
-        return
     for attempt in range(max_retries):
         try:
+            if object_exists(dest_bucket, dest_key):
+                log.debug(f"Seed object already present: {dest_bucket}/{dest_key}")
+                return
             if not object_exists(src_bucket, src_key):
                 log.warning(
                     f"Seed source not ready s3://{src_bucket}/{src_key} "
@@ -181,7 +181,7 @@ def _ensure_object_with_retry(
                 continue
             copy_object(dest_bucket, dest_key, src_bucket, src_key)
             return
-        except S3Error as e:
+        except (ClientError, BotoCoreError) as e:
             log.warning(
                 f"Seed copy failed (attempt {attempt + 1}/{max_retries}): {e}; retrying..."
             )
@@ -192,26 +192,26 @@ def _ensure_object_with_retry(
     )
 
 
-def _ping_minio(max_attempts: int = 15, delay_s: float = 2.0) -> None:
+def _ping_storage(max_attempts: int = 15, delay_s: float = 2.0) -> None:
     for attempt in range(max_attempts):
         try:
-            client = get_minio_client()
+            client = get_s3_client()
             client.list_buckets()
             return
         except Exception as e:
             if attempt == max_attempts - 1:
                 raise RuntimeError(
-                    f"MinIO not reachable after {max_attempts} attempts: {e}"
+                    f"Object storage not reachable after {max_attempts} attempts: {e}"
                 ) from e
             log.warning(
-                f"MinIO not ready (attempt {attempt + 1}/{max_attempts}): {e}; retrying..."
+                f"Object storage not ready (attempt {attempt + 1}/{max_attempts}): {e}; retrying..."
             )
             time.sleep(delay_s)
 
 
 def insert_demo_configs() -> None:
     """Insert demo app_config rows; caller should invoke only when DB has no configs yet."""
-    data_bucket = os.getenv("MINIO_VIDEO_BUCKET", "data").strip() or "data"
+    data_bucket = os.getenv("VIDEO_BUCKET", "data").strip() or "data"
     cfg_bucket = get_config_bucket()
     model_url = _default_model_url()
     # Each tuple: (served OVMS/Triton model id, video filename in data bucket, class entries).
@@ -226,7 +226,7 @@ def insert_demo_configs() -> None:
         "Seeding demo app configs (model_url=%s, traffic demo model=yolov8n)",
         model_url,
     )
-    _ping_minio()
+    _ping_storage()
 
     for served_model_id, video_filename, entries in demos:
         dest_key = f"uploads/{video_filename}"

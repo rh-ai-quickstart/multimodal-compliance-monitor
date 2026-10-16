@@ -35,8 +35,8 @@ def load_config():
         "namespace": namespace,
         "runtime_type": os.getenv("RUNTIME_TYPE", "openvino").lower(),
         "deploy_enabled": os.getenv("DEPLOY_MODEL", "true").lower() == "true",
-        "minio_access_key": os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
-        "minio_secret_key": os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+        "s3_access_key": os.getenv("AWS_ACCESS_KEY_ID") or "s4admin",
+        "s3_secret_key": os.getenv("AWS_SECRET_ACCESS_KEY") or "s4secret",
         "serving_runtime": os.getenv("SERVING_RUNTIME", f"{namespace}-deploy"),
         "create_serving_runtime": os.getenv("CREATE_SERVING_RUNTIME", "true").lower()
         == "true",
@@ -60,9 +60,8 @@ def load_config():
         "inference_service_name": os.getenv("INFERENCE_SERVICE_NAME", "").strip(),
         "s3_bucket": os.getenv("S3_BUCKET", "models"),
         "s3_model_path": os.getenv("S3_MODEL_PATH", "ovms/ppe"),
-        "minio_endpoint": os.getenv(
-            "MINIO_ENDPOINT", f"http://minio.{namespace}.svc.cluster.local:9000"
-        ),
+        "s3_endpoint": os.getenv("AWS_ENDPOINT_URL")
+        or "http://aws-compatible-storage:7480",
         "model_version_to_deploy": os.getenv("MODEL_VERSION_TO_DEPLOY", ""),
         "replicas_min": int(os.getenv("REPLICAS_MIN", "1")),
         "replicas_max": int(os.getenv("REPLICAS_MAX", "1")),
@@ -89,7 +88,7 @@ def load_model_info_from_s3(cfg):
         "model_version": cfg["model_version"],
         "bucket": cfg["s3_bucket"],
         "model_path": cfg["s3_model_path"],
-        "minio_endpoint": cfg["minio_endpoint"],
+        "s3_endpoint": cfg["s3_endpoint"],
     }
 
 
@@ -137,7 +136,7 @@ def load_model_info_from_registry(cfg):
     version_id = target_version["id"]
     print(f"Using version: {model_version} (id: {version_id})")
 
-    storage_uri, minio_endpoint = _extract_storage_info(
+    storage_uri, s3_endpoint = _extract_storage_info(
         api_base, target_version, version_id
     )
 
@@ -146,19 +145,19 @@ def load_model_info_from_registry(cfg):
 
     bucket, model_path = _parse_s3_uri(storage_uri)
 
-    if not minio_endpoint:
-        minio_endpoint = cfg["minio_endpoint"]
+    if not s3_endpoint:
+        s3_endpoint = cfg["s3_endpoint"]
 
     print("Resolved deployment info from registry:")
     print(f"  Bucket: {bucket}, Path: {model_path}")
-    print(f"  MinIO Endpoint: {minio_endpoint}")
+    print(f"  S3 endpoint: {s3_endpoint}")
 
     return {
         "model_name": model_name,
         "model_version": model_version,
         "bucket": bucket,
         "model_path": model_path,
-        "minio_endpoint": minio_endpoint,
+        "s3_endpoint": s3_endpoint,
     }
 
 
@@ -175,10 +174,10 @@ def _find_model_version(versions, version_override):
 
 
 def _extract_storage_info(api_base, target_version, version_id):
-    """Extract storage URI and MinIO endpoint from version metadata."""
+    """Extract storage URI and S3 endpoint from version metadata."""
     custom_props = target_version.get("customProperties", {})
     storage_uri = custom_props.get("storage_uri", {}).get("string_value", "")
-    minio_endpoint = custom_props.get("minio_endpoint", {}).get("string_value", "")
+    s3_endpoint = custom_props.get("s3_endpoint", {}).get("string_value", "")
 
     if not storage_uri:
         artifacts_response = requests.get(
@@ -190,7 +189,7 @@ def _extract_storage_info(api_base, target_version, version_id):
             if artifacts:
                 storage_uri = artifacts[0].get("uri", "")
 
-    return storage_uri, minio_endpoint
+    return storage_uri, s3_endpoint
 
 
 def _parse_s3_uri(storage_uri):
@@ -229,7 +228,7 @@ def create_or_update_resource(create_fn, update_fn, resource_name):
 
 
 def create_storage_secret(core_v1, cfg, model_info):
-    """Create the storage-config secret for S3/MinIO access.
+    """Create the storage-config secret for S3 access.
 
     Matches the Helm template structure: the data connection is keyed
     by namespace so KServe can look it up via storage.key.
@@ -239,11 +238,11 @@ def create_storage_secret(core_v1, cfg, model_info):
     storage_config_json = json.dumps(
         {
             "type": "s3",
-            "access_key_id": cfg["minio_access_key"],
-            "secret_access_key": cfg["minio_secret_key"],
-            "endpoint_url": model_info["minio_endpoint"],
+            "access_key_id": cfg["s3_access_key"],
+            "secret_access_key": cfg["s3_secret_key"],
+            "endpoint_url": model_info["s3_endpoint"],
             "bucket": model_info["bucket"],
-            "region": "",
+            "region": os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
         }
     )
 
@@ -553,7 +552,7 @@ def build_inference_service_spec(cfg, model_info, sa_name):
     """Build the InferenceService specification.
 
     Uses storage.key (namespace) + storage.path pattern matching the Helm
-    template (path is the MinIO prefix; KServe maps it under /mnt/models with
+    template (path is the object-storage prefix; KServe maps it under /mnt/models with
     this prefix stripped—use triton/ not triton/<model> for Triton repos).
     RawDeployment mode and OpenDataHub annotations.
     When GPU is enabled, adds nvidia.com/gpu resources and node tolerations.

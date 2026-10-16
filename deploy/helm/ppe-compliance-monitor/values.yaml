@@ -20,7 +20,7 @@ backend:
     limits:
       cpu: "2"
       memory: 4Gi
-  # Config storage: MinIO (config bucket) when enabled - enables horizontal scaling
+  # Config storage: aws-compatible-storage config bucket when enabled - enables horizontal scaling
   configStorage:
     enabled: true
   image:
@@ -53,44 +53,65 @@ frontend:
     tag: latest
     pullPolicy: Always
 
-minio:
-  secret:
-    user: minioadmin
-    password: minioadmin
-    host: minio
-    port: "9000"
-
-  # Auto-create buckets on deployment
-  bucketCreation:
+# S3-compatible object storage from ai-architecture-charts. S3 API stays in-cluster.
+# Credentials come from Secret aws-compatible-storage-credentials (AWS_ACCESS_KEY_ID /
+# AWS_SECRET_ACCESS_KEY). Do not put cluster keys in this file; use a gitignored
+# values-secrets.yaml or --set s3Credentials.* .
+aws-compatible-storage:
+  enabled: true
+  fullnameOverride: aws-compatible-storage
+  image:
+    repository: quay.io/rh-aiservices-bu/s4
+    tag: "0.3.2"
+    pullPolicy: IfNotPresent
+  s3:
+    existingSecret: aws-compatible-storage-credentials
+    region: us-east-1
+  auth:
     enabled: true
-    buckets:
-      - models
-      - data
-      - config # User uploads and thumbnails (enables horizontal scaling)
+  route:
+    enabled: true
+    s3Api:
+      enabled: false
+  storage:
+    data:
+      size: 10Gi
 
-  # Disable persistent storage so the PVC is not left behind after helm uninstall
-  volumeClaimTemplates: []
-  volumeMounts: []
+# S3 / UI credential Secret (aws-compatible-storage-credentials).
+# Create values-secrets.yaml (gitignored) or use --set s3Credentials.* at deploy time.
+# `make deploy` will fail without credentials.
+#
+# The Secret must contain at minimum:
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+# When aws-compatible-storage.auth.enabled is true, also include:
+#   UI_USERNAME, UI_PASSWORD
+s3Credentials:
+  create: true
+  accessKeyId: ""
+  secretAccessKey: ""
+  uiUsername: ""
+  uiPassword: ""
 
-  # Upload sample files to the minio bucket
-  sampleFileUpload:
-    enabled: false
-    # bucket: models
-    # urls:
-    # - https://raw.githubusercontent.com/***
+awsCompatibleStorageBuckets:
+  create: true
+  names:
+    - models
+    - data
+    - config
 
-# Video stream (RTSP) - always streams. Default: in-cluster MP4 from MinIO via MediaMTX
+jobImages:
+  cli: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+  python: registry.redhat.io/ubi9/python-311:latest
+  shell: registry.redhat.io/ubi9/ubi-minimal:latest
+
+# Video stream (RTSP) - always streams. Default: in-cluster MP4 from object storage via MediaMTX
 # For real camera: set streamUrl (e.g. rtsp://user:pass@camera-ip:554/stream)
 videoStream:
-  # When empty: deploy in-cluster video-stream stack (MP4 from MinIO)
+  # When empty: deploy in-cluster video-stream stack (MP4 from object storage)
   # When set: use external stream (real camera), do not deploy video-stream
   streamUrl: ""
   image:
     repository: bluenviron/mediamtx
-    tag: latest
-    pullPolicy: IfNotPresent
-  ffmpegImage:
-    repository: minio/mc
     tag: latest
     pullPolicy: IfNotPresent
   port: 8554
@@ -101,7 +122,7 @@ videoStream:
     writeQueueSize: ""
     udpReadBufferSize: ""
 
-# MinIO storage configuration for model and video files
+# Object storage keys for model and video files (buckets created by the parent bootstrap Job)
 storage:
   enabled: true
   # PVC size for storing downloaded model and video files
@@ -298,7 +319,7 @@ modelServing:
     modelFormat:
       name: onnx
       version: "1"
-    # Single model: MinIO prefix must be triton/ (not triton/<stem>): KServe strips storage.path under /mnt/models, so
+    # Single model: object prefix must be triton/ (not triton/<stem>): KServe strips storage.path under /mnt/models, so
     # triton/ppe yielded .../1/model.onnx (invalid model name "1"); triton yields .../ppe/1/model.onnx. runtimeDeployer.modelName must match <stem> (e.g. ppe).
     modelPath: triton
     # Multi-model: same parent prefix triton/ (see multiModelStoragePath). Triton trees: triton/<stem>/1/model.onnx; --strict-model-config=false.

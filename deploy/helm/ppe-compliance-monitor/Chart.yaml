@@ -5,12 +5,12 @@ type: application
 version: 0.1.0
 appVersion: "1.0.0"
 
-
 dependencies:
   # External dependencies from remote repositories
-  - name: minio
-    version: 0.5.4
+  - name: aws-compatible-storage
+    version: 0.2.0
     repository: https://rh-ai-quickstart.github.io/ai-architecture-charts
+    condition: aws-compatible-storage.enabled
   - name: label-studio
     version: 0.1.0
     repository: file://../label-studio

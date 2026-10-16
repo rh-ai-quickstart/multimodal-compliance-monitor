@@ -66,6 +66,7 @@ RUNTIME_TYPE ?= openvino
 LABEL_STUDIO_ENABLED ?=
 EVAL_FEATURE ?= chat
 EVAL_DATASET ?= ppe
+DEPLOY_VALUES_FILE ?=
 
 helm-deps:
 	@echo "Updating Helm chart dependencies..."
@@ -207,6 +208,15 @@ deploy: helm-deps check-openai-env
 		--set openai.apiEndpoint=$$OPENAI_API_ENDPOINT \
 		--set openai.model=$$OPENAI_MODEL \
 		--set openai.temperature=$$OPENAI_TEMPERATURE"; \
+	if [ -n "$(DEPLOY_VALUES_FILE)" ]; then \
+		helm_args="$$helm_args -f $(DEPLOY_VALUES_FILE)"; \
+	elif [ -f $(HELM_CHART)/values-secrets.yaml ]; then \
+		helm_args="$$helm_args -f $(HELM_CHART)/values-secrets.yaml"; \
+	else \
+		echo "ERROR: $(HELM_CHART)/values-secrets.yaml not found."; \
+		echo "  Create values-secrets.yaml with your S3 credentials (see values.yaml for the schema)."; \
+		exit 1; \
+	fi; \
 	helm upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
 		--namespace $(NAMESPACE) --create-namespace $$helm_args
 
@@ -265,17 +275,17 @@ kill-ports: ## Kill processes using required ports
 	fi
 	@echo "   ✓ OVMS gRPC 8081 killed"
 	@if [ "$$(uname)" = "Darwin" ]; then \
-		lsof -ti :9000 | xargs kill -9 2>/dev/null || true; \
+		lsof -ti :7480 | xargs kill -9 2>/dev/null || true; \
 	else \
-		fuser -k 9000/tcp 2>/dev/null || true; \
+		fuser -k 7480/tcp 2>/dev/null || true; \
 	fi
-	@echo "   ✓ MinIO 9000 killed"
+	@echo "   ✓ S3 API 7480 killed"
 	@if [ "$$(uname)" = "Darwin" ]; then \
-		lsof -ti :9001 | xargs kill -9 2>/dev/null || true; \
+		lsof -ti :5000 | xargs kill -9 2>/dev/null || true; \
 	else \
-		fuser -k 9001/tcp 2>/dev/null || true; \
+		fuser -k 5000/tcp 2>/dev/null || true; \
 	fi
-	@echo "   ✓ MinIO Console 9001 killed"
+	@echo "   ✓ Storage UI 5000 killed"
 	@if [ "$$(uname)" = "Darwin" ]; then \
 		lsof -ti :5432 | xargs kill -9 2>/dev/null || true; \
 	else \

@@ -1,12 +1,12 @@
 dependencies:
-- name: minio
+- name: aws-compatible-storage
   repository: https://rh-ai-quickstart.github.io/ai-architecture-charts
-  version: 0.5.4
+  version: 0.2.0
 - name: label-studio
   repository: file://../label-studio
   version: 0.1.0
 - name: jupyter-training
   repository: file://../jupyter-training
   version: 0.1.0
-digest: sha256:0c7fd1612d7ee4330da49e59b971afd8ee515bfeb612f03c94c8ee6110f31591
-generated: "2026-05-01T16:10:35.373287348-04:00"
+digest: sha256:2faba08873d18567dab00b49c1fb421daf8fea1e8a6da440480191cdd3787586
+generated: "2026-10-14T10:39:49.495014-04:00"

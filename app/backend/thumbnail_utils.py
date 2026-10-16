@@ -5,7 +5,7 @@ import tempfile
 
 import cv2
 
-from minio_client import download_file, get_config_bucket, object_exists, upload_bytes
+from s3_client import download_file, get_config_bucket, object_exists, upload_bytes
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -33,7 +33,7 @@ def parse_s3_video_path(video_path: str):
 
 
 def generate_thumbnail_for_video_source(video_path: str):
-    """Generate a JPEG thumbnail from S3 video, upload to MinIO. Returns S3 key or None.
+    """Generate a JPEG thumbnail from S3 video, upload to S3. Returns S3 key or None.
 
     Thumbnails are always stored in the config bucket (``CONFIG_BUCKET`` / ``get_config_bucket()``)
     under ``thumbnails/``, matching the ``/api/thumbnails/...`` route and the Config dialog **Upload**
@@ -51,10 +51,10 @@ def generate_thumbnail_for_video_source(video_path: str):
         return None
     thumb_bucket = get_config_bucket()
     thumb_key = f"thumbnails/{stem}.jpg"
-    if object_exists(thumb_bucket, thumb_key):
-        log.debug("Thumbnail already exists: %s/%s", thumb_bucket, thumb_key)
-        return thumb_key
     try:
+        if object_exists(thumb_bucket, thumb_key):
+            log.debug("Thumbnail already exists: %s/%s", thumb_bucket, thumb_key)
+            return thumb_key
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
             tmp_path = tmp.name
         try:

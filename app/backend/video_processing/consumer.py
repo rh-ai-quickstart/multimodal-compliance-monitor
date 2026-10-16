@@ -10,7 +10,7 @@ import tempfile
 
 import cv2
 
-from minio_client import download_file
+from s3_client import download_file
 
 log = logging.getLogger(__name__)
 

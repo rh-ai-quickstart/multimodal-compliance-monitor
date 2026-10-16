@@ -80,14 +80,7 @@ spec:
           env:
             - name: CORS_ORIGINS
               value: {{ default (printf "http://%s-frontend:%d" (include "ppe-compliance-monitor.fullname" .) .Values.frontend.port) .Values.backend.corsOrigins | quote }}
-            - name: MINIO_ENDPOINT
-              value: "http://{{ .Values.minio.secret.host }}:{{ .Values.minio.secret.port }}"
-            - name: MINIO_ACCESS_KEY
-              value: {{ .Values.minio.secret.user | quote }}
-            - name: MINIO_SECRET_KEY
-              value: {{ .Values.minio.secret.password | quote }}
-            - name: MINIO_SECURE
-              value: "false"
+            {{- include "ppe-compliance-monitor.s3Env" . | nindent 12 }}
             - name: MODEL_PATH
               value: "/data/models/{{ .Values.storage.model.key }}"
             - name: MODEL_INPUT_NAME
@@ -131,7 +124,7 @@ spec:
               value: {{ .Values.backend.defaultOvmsModelUrl | default "http://ppe-predictor:9000" | quote }}
             - name: OVMS_GRPC_TIMEOUT
               value: {{ .Values.backend.ovmsGrpcTimeout | default "60" | quote }}
-            - name: MINIO_VIDEO_BUCKET
+            - name: VIDEO_BUCKET
               value: {{ .Values.storage.video.bucket | default "data" | quote }}
             {{- if .Values.postgresMcp.enabled }}
             - name: POSTGRES_MCP_URL

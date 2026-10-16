@@ -7,7 +7,7 @@ flowchart LR
     INF[Inference Runtime]
     BBOX[Draw bounding boxes]
     DB[(PostgreSQL\nconfigs + classes + detections)]
-    MINIO[(MinIO\nvideos + models + thumbnails)]
+    STORAGE[(aws-compatible-storage\nvideos + models + thumbnails)]
     RTSP[Live RTSP stream]
     LLM[OpenAI-compatible LLM endpoint]
 
@@ -21,7 +21,7 @@ flowchart LR
     FE -->|GET /video_feed| API
     API --> INF
     RTSP --> INF
-    MINIO -->|MP4/model assets| INF
+    STORAGE -->|MP4/model assets| INF
     INF --> BBOX
     BBOX -->|detections + summary| API
     API --> FE

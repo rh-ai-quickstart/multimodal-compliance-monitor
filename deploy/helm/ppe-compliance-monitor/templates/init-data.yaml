@@ -21,12 +21,9 @@ spec:
           image: "{{ .Values.global.imageRegistry }}/{{ .Values.data.image.repository }}:{{ .Values.data.image.tag }}"
           imagePullPolicy: {{ .Values.data.image.pullPolicy }}
           env:
-            - name: MINIO_ENDPOINT
-              value: "http://{{ .Values.minio.secret.host }}:{{ .Values.minio.secret.port }}"
-            - name: MINIO_ACCESS_KEY
-              value: {{ .Values.minio.secret.user | quote }}
-            - name: MINIO_SECRET_KEY
-              value: {{ .Values.minio.secret.password | quote }}
+            {{- include "ppe-compliance-monitor.s3Env" . | nindent 12 }}
+            - name: BUCKETS
+              value: {{ join "," .Values.awsCompatibleStorageBuckets.names | quote }}
             - name: RUNTIME_TYPE
               value: {{ .Values.modelServing.runtimeType | quote }}
             {{- if eq .Values.modelServing.runtimeType "openvino" }}
@@ -39,4 +36,118 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- end }}
+{{- end }}
+---
+{{- $storage := index .Values "aws-compatible-storage" | default dict }}
+{{- if and $storage.enabled .Values.awsCompatibleStorageBuckets.create }}
+{{- $jobHash := printf "%s:%s" (join "," .Values.awsCompatibleStorageBuckets.names) (include "ppe-compliance-monitor.s3Env" .) | sha256sum | trunc 8 }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-s3-%s" (include "ppe-compliance-monitor.fullname" .) $jobHash | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "ppe-compliance-monitor.labels" . | nindent 4 }}
+    app.kubernetes.io/component: s3-buckets
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "ppe-compliance-monitor.labels" . | nindent 8 }}
+        app.kubernetes.io/component: s3-buckets
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-buckets
+          image: {{ .Values.jobImages.python | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HOME
+              value: /tmp
+            {{- include "ppe-compliance-monitor.s3Env" . | nindent 12 }}
+            - name: AWS_COMPATIBLE_STORAGE_UI_URL
+              value: {{ printf "http://%s:%v/api" (include "ppe-compliance-monitor.storageFullname" .) $storage.service.port | quote }}
+            - name: BUCKETS
+              value: {{ join "," .Values.awsCompatibleStorageBuckets.names | quote }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -eu
+              export HOME=/tmp
+              pip install --no-cache-dir -q boto3
+              python - <<'PY'
+              import os, time, urllib.error, urllib.request
+              import boto3
+              from botocore.client import Config
+              from botocore.exceptions import ClientError
+
+              ui = os.environ["AWS_COMPATIBLE_STORAGE_UI_URL"]
+              buckets = [name.strip() for name in os.environ["BUCKETS"].split(",") if name.strip()]
+
+              def wait_ui():
+                  last = None
+                  for attempt in range(1, 61):
+                      try:
+                          with urllib.request.urlopen(ui, timeout=5) as response:
+                              if response.status < 500:
+                                  print("UI ready: " + ui)
+                                  return
+                      except urllib.error.HTTPError as exc:
+                          if exc.code < 500:
+                              print("UI ready: " + ui + " (" + str(exc.code) + ")")
+                              return
+                          last = exc
+                      except Exception as exc:
+                          last = exc
+                      print("UI not ready (attempt " + str(attempt) + "/60): " + str(last))
+                      time.sleep(5)
+                  raise SystemExit("UI not ready: " + str(last))
+
+              def client():
+                  return boto3.client(
+                      "s3",
+                      endpoint_url=os.environ["AWS_ENDPOINT_URL"],
+                      aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+                      aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+                      region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+                      config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+                  )
+
+              wait_ui()
+              s3 = None
+              last = None
+              for attempt in range(1, 61):
+                  try:
+                      s3 = client()
+                      s3.list_buckets()
+                      print("S3 API ready")
+                      break
+                  except Exception as exc:
+                      last = exc
+                      print("S3 API not ready (attempt " + str(attempt) + "/60): " + str(exc))
+                      time.sleep(5)
+              else:
+                  raise SystemExit("S3 API not ready: " + str(last))
+
+              for name in buckets:
+                  try:
+                      s3.create_bucket(Bucket=name)
+                      print("created " + name)
+                  except ClientError as exc:
+                      code = exc.response.get("Error", {}).get("Code", "")
+                      status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+                      if code in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists") or status == 409:
+                          print("exists " + name)
+                      else:
+                          raise
+
+              smoke_bucket = buckets[0]
+              smoke_key = ".bootstrap-smoke"
+              s3.put_object(Bucket=smoke_bucket, Key=smoke_key, Body=b"ok")
+              s3.get_object(Bucket=smoke_bucket, Key=smoke_key)
+              s3.delete_object(Bucket=smoke_bucket, Key=smoke_key)
+              print("smoke ok")
+              PY
 {{- end }}

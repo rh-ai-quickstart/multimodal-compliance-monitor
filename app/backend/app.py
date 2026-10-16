@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 from tracing import init_tracing
-from minio_client import (
+from s3_client import (
     get_config_bucket,
     upload_bytes,
     get_object_stream,
@@ -551,36 +551,35 @@ def active_config_set():
         return jsonify({"error": str(e)}), 500
 
 
-# Config storage: MinIO only (enables horizontal scaling)
-log.info("Config storage: MinIO bucket=%s", get_config_bucket())
+# Config storage: S3 only (enables horizontal scaling)
+log.info("Config storage: S3 bucket=%s", get_config_bucket())
 
 
 @api.route("/thumbnails/<path:filename>")
 def serve_thumbnail(filename):
-    """Serve a thumbnail image by filename (e.g. video.jpg) from MinIO."""
+    """Serve a thumbnail image by filename (e.g. video.jpg) from S3."""
     if ".." in filename or "/" in filename:
         return jsonify({"error": "Invalid filename"}), 400
     if not filename.lower().endswith(".jpg"):
         return jsonify({"error": "Only .jpg thumbnails are served"}), 400
     thumb_key = f"thumbnails/{filename}"
-    if object_exists(get_config_bucket(), thumb_key):
-        try:
+    try:
+        if object_exists(get_config_bucket(), thumb_key):
             resp = get_object_stream(get_config_bucket(), thumb_key)
             try:
                 data = resp.read()
                 return Response(data, mimetype="image/jpeg")
             finally:
                 resp.close()
-                resp.release_conn()
-        except Exception as e:
-            log.exception("serve_thumbnail: %s", e)
-            return jsonify({"error": "Failed to load thumbnail"}), 500
+    except Exception as e:
+        log.exception("serve_thumbnail: %s", e)
+        return jsonify({"error": "Failed to load thumbnail"}), 500
     return jsonify({"error": "Thumbnail not found"}), 404
 
 
 @api.route("/config/upload", methods=["POST"])
 def config_upload():
-    """Upload a video file to MinIO. Returns S3 URI for video_source (e.g. s3://config/uploads/filename.mp4)."""
+    """Upload a video file to S3. Returns S3 URI for video_source (e.g. s3://config/uploads/filename.mp4)."""
     if "file" not in request.files:
         return jsonify({"error": "No file in request"}), 400
     f = request.files["file"]

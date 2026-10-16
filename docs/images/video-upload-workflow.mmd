@@ -3,12 +3,12 @@ flowchart LR
     U[User]
     FE[Frontend Config Page]
     API[Backend API\nPOST /api/config/upload]
-    MINIO[(MinIO config bucket)]
+    STORAGE[(aws-compatible-storage\nconfig bucket)]
     DB[(PostgreSQL app_config)]
 
     U --> FE
     FE -->|Select MP4 file + multipart/form-data upload| API
-    API -->|Store uploads/thumbnails| MINIO
+    API -->|Store uploads/thumbnails| STORAGE
     API -->|Return s3://config/uploads/<filename>| FE
     FE -->|Create source with video_source| API
     API -->|Save source config| DB

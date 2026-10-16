@@ -10,7 +10,7 @@ What follows is a walkthrough of the entire workflow — from labeling images an
 
 The system uses YOLOv8, a state-of-the-art object detection architecture. Out of the box, YOLOv8 is pretrained on the COCO dataset and can already recognize 80 common object classes — people, cars, animals, and everyday items. For many general monitoring scenarios, this pretrained model works immediately with no additional training. However, when a deployment needs to detect domain-specific objects that fall outside COCO's vocabulary — such as hardhats, safety vests, masks, and their absence — the model must be fine-tuned on new labeled images through transfer learning.
 
-Labeling those images is supported through an integrated [Label Studio](https://labelstud.io/) instance, accessible via its own OpenShift route, which provides a browser-based annotation interface backed by the same PostgreSQL and MinIO storage stack as the rest of the application. For teams looking to accelerate annotation, the training pipeline includes optional AI-assisted labeling powered by Grounding DINO, which can generate initial bounding boxes automatically for human review and refinement. 
+Labeling those images is supported through an integrated [Label Studio](https://labelstud.io/) instance, accessible via its own OpenShift route, which provides a browser-based annotation interface backed by the same PostgreSQL database as the rest of the application. For teams looking to accelerate annotation, the training pipeline includes optional AI-assisted labeling powered by Grounding DINO, which can generate initial bounding boxes automatically for human review and refinement.
 
 The image below shows an example of this process in Label Studio: a bounding box has been drawn around a staff identification badge worn by a nurse, teaching the model to recognize badges in a hospital setting.
 
@@ -32,13 +32,13 @@ Both runtimes communicate with the backend over gRPC for fast, low-overhead infe
 
 A single deployment can serve multiple models simultaneously. The included demo configurations showcase this: PPE detection with ten classes, bird species identification, and general traffic monitoring using a pretrained model — all served from the same infrastructure, seamlessly switchable at runtime.
 
-Adding a new video source is done through the application's configuration page. Users provide the model server URL (the OVMS or KServe endpoint), a model name (e.g., `ppe`, `bird`, or `yolov8n`), a video source (a local file path, S3 object URL, or RTSP stream), and a JSON class definition that maps the model's numeric class indices to human-readable names and specifies which classes should be tracked. An upload button allows video files to be pushed directly to MinIO storage from the browser.
+Adding a new video source is done through the application's configuration page. Users provide the model server URL (the OVMS or KServe endpoint), a model name (e.g., `ppe`, `bird`, or `yolov8n`), a video source (a local file path, S3 object URL, or RTSP stream), and a JSON class definition that maps the model's numeric class indices to human-readable names and specifies which classes should be tracked. An upload button allows video files to be pushed directly to aws-compatible-storage from the browser.
 
 ![Configuration page for adding a new video source with model URL, model name, video source, and class definitions](config.png)
 
 ## Real-time video processing and object detection
 
-With a model being served, the system is ready to process live video. It ingests frames from multiple source types: live RTSP camera streams, MP4 files stored in MinIO (the system's S3-compatible object storage), or local video files. RTSP streams include automatic reconnection logic; file-based sources loop continuously and throttle to their native frame rate.
+With a model being served, the system is ready to process live video. It ingests frames from multiple source types: live RTSP camera streams, MP4 files stored in aws-compatible-storage, or local video files. RTSP streams include automatic reconnection logic; file-based sources loop continuously and throttle to their native frame rate.
 
 The inference pipeline is designed for throughput. A pool of worker threads preprocesses incoming frames and batches them into a single tensor for each inference call, reducing the overhead of individual gRPC round trips. After inference, the raw model output goes through standard post-processing — non-maximum suppression to eliminate duplicate detections, coordinate conversion to map results back to original frame dimensions, and confidence thresholding to filter out low-quality predictions.
 
@@ -85,7 +85,7 @@ Switching to a PPE compliance video, the same dashboard now detects people, hard
 
 ![Dashboard screenshot showing PPE compliance monitoring with bounding boxes around workers and their safety equipment](ppe.png)
 
-Multiple browser tabs or clients stay synchronized through Server-Sent Events (SSE). When one user switches the active video source, all connected clients update automatically. A dedicated configuration page provides full management of video sources, detection class definitions, and alert rules, including the ability to upload new video files directly to MinIO storage.
+Multiple browser tabs or clients stay synchronized through Server-Sent Events (SSE). When one user switches the active video source, all connected clients update automatically. A dedicated configuration page provides full management of video sources, detection class definitions, and alert rules, including the ability to upload new video files directly to S3-compatible storage.
 
 ## Running on CPU — no GPU required
 
@@ -95,13 +95,12 @@ For smaller-scale deployments — monitoring anywhere from one to around thirty 
 
 ## Deployment options
 
-The system is designed to run at multiple scales. For local development and demos, a Podman Compose configuration brings up the full stack — twelve containerized services including MinIO, PostgreSQL, the MCP server, a media relay for RTSP, model preparation, model serving, the backend, the frontend, and optional components like Label Studio and Arize Phoenix for LLM tracing.
+The system is designed to run at multiple scales. For local development and demos, a Podman Compose configuration brings up the full stack — twelve containerized services including aws-compatible-storage, PostgreSQL, the MCP server, a media relay for RTSP, model preparation, model serving, the backend, the frontend, and optional components like Label Studio and Arize Phoenix for LLM tracing.
 
-For production, a Helm chart deploys the same application on Kubernetes or OpenShift with support for routes, network policies, security context constraints, and persistent volume claims. Init containers handle the workflow of uploading model and video assets to MinIO, then downloading them to local storage before the backend starts.
+For production, a Helm chart deploys the same application on Kubernetes or OpenShift with support for routes, network policies, security context constraints, and persistent volume claims. A bucket bootstrap Job and the data loader upload model and video assets to S3-compatible storage. The video-stream init container downloads the sample MP4 before streaming starts.
 
 ## Conclusion
 
 This project demonstrates what becomes possible when computer vision and large language models are combined in a single, end-to-end platform. The workflow spans from annotating images and training a custom YOLO model, through real-time video processing and multi-object tracking with persistent PPE association, to conversational analytics that let users query both live and historical compliance data in plain English.
 
 It is not a collection of disconnected AI demos — it is a cohesive application where each layer feeds the next: training produces models, models produce detections, detections produce tracks, tracks produce database records, and those records become queryable through natural-language chat and alerts. That integration is what makes it useful for real workplace safety monitoring, not just a proof of concept.
-
